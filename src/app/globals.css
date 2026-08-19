@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+
+  /* Samara AI — light operational canvas */
+  --background: #edf1f6;
+  --canvas: #f7f9fc;
+  --inset: #e8edf3;
+  --foreground: #172033;
+  --surface: #ffffff;
+  --surface-muted: #f6f8fb;
+  --surface-subtle: #edf3fc;
+
+  /* Matn va chegaralar */
+  --muted: #6a778b;
+  --muted-strong: #48566c;
+  --faint: #98a3b3;
+  --border: #e1e7ef;
+  --border-strong: #cdd6e2;
+
+  /* Brend ranglari */
+  --primary: #2559c7;
+  --primary-hover: #1d49ab;
+  --primary-soft: #edf3ff;
+  --primary-foreground: #ffffff;
+  --accent: #087d72;
+  --accent-soft: #eaf8f5;
+  --sidebar: #ffffff;
+  --sidebar-muted: #69768a;
+  --sidebar-foreground: #172033;
+
+  /* Holat ranglari */
+  --success: #16a34a;
+  --success-soft: #f0fdf4;
+  --warning: #d97706;
+  --warning-soft: #fffbeb;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --info: #0284c7;
+  --info-soft: #f0f9ff;
+
+  /* Grafiklar */
+  --chart-1: #2559c7;
+  --chart-2: #087d72;
+  --chart-3: #7357c7;
+  --chart-4: #c77a18;
+  --chart-5: #1685a6;
+  --chart-grid: #e1e7ef;
+
+  /* O'lcham va effektlar */
+  --radius-small: 0.5rem;
+  --radius-medium: 0.75rem;
+  --radius-large: 1rem;
+  --radius-extra-large: 1.5rem;
+  --shell-radius: 1.75rem;
+  --sidebar-width: 16rem;
+  --card-shadow: 0 1px 2px rgb(23 32 51 / 0.035),
+    0 8px 28px rgb(23 32 51 / 0.035);
+  --shell-shadow: 0 1px 2px rgb(23 32 51 / 0.04),
+    0 14px 40px rgb(23 32 51 / 0.045);
+  --floating-shadow: 0 18px 48px rgb(23 32 51 / 0.14);
+  --transition-fast: 150ms;
+  --transition-base: 220ms;
+}
+
+@theme inline {
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-jetbrains-mono);
+
+  --color-background: var(--background);
+  --color-canvas: var(--canvas);
+  --color-inset: var(--inset);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-grid: var(--chart-grid);
+
+  --radius-sm: var(--radius-small);
+  --radius-md: var(--radius-medium);
+  --radius-lg: var(--radius-large);
+  --radius-xl: var(--radius-extra-large);
+  --radius-shell: var(--shell-radius);
+  --shadow-card: var(--card-shadow);
+  --shadow-shell: var(--shell-shadow);
+  --shadow-floating: var(--floating-shadow);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--background);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+a {
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-label {
+  font-size: 0.65625rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise-in {
+  animation: rise-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 32%, transparent);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted) 52%, transparent);
+    background-clip: padding-box;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
