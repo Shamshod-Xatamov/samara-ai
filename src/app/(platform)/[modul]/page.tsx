@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { navigationItems } from "@/config/navigation";
 
-const moduleItems = navigationItems.filter((item) => item.href !== "/dashboard");
+const completedModules = new Set(["/dashboard", "/malumotlar", "/qayta-ishlash"]);
+const moduleItems = navigationItems.filter((item) => !completedModules.has(item.href));
 
 export const dynamicParams = false;
 

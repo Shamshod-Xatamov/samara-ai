@@ -128,11 +128,11 @@ export function AppTopbar({
                   >
                     Bildirishnomalar
                   </p>
-                  <p className="mt-0.5 text-[11px] text-muted">
+                  <p className="mt-0.5 text-[13px] text-muted">
                     Tizimdagi so&apos;nggi o&apos;zgarishlar
                   </p>
                 </div>
-                <span className="rounded-full bg-danger-soft px-2 py-1 text-[10px] font-bold text-danger">
+                <span className="rounded-full bg-danger-soft px-2 py-1 text-xs font-bold text-danger">
                   2 ta yangi
                 </span>
               </div>
@@ -149,7 +149,7 @@ export function AppTopbar({
                     <p className="mt-1 text-xs leading-5 text-muted">
                       Joriy qiymat 620 ms, belgilangan chegara 500 ms.
                     </p>
-                    <p className="mt-1.5 font-mono text-[10px] text-faint">
+                    <p className="mt-1.5 font-mono text-xs text-faint">
                       5 daqiqa oldin
                     </p>
                   </div>
@@ -166,7 +166,7 @@ export function AppTopbar({
                     <p className="mt-1 text-xs leading-5 text-muted">
                       Iqtisodiy samaradorlik hisoboti shakllantirildi.
                     </p>
-                    <p className="mt-1.5 font-mono text-[10px] text-faint">
+                    <p className="mt-1.5 font-mono text-xs text-faint">
                       18 daqiqa oldin
                     </p>
                   </div>
@@ -186,7 +186,7 @@ export function AppTopbar({
             aria-haspopup="dialog"
             aria-controls="account-popover"
           >
-            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft font-mono text-[10px] font-bold text-primary ring-1 ring-inset ring-primary/15">
+            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft font-mono text-xs font-bold text-primary ring-1 ring-inset ring-primary/15">
               AK
             </span>
             <span className="hidden max-w-36 truncate text-[12px] font-bold sm:inline">
@@ -225,7 +225,7 @@ export function AppTopbar({
                 <div className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-muted">
                   <div className="flex min-h-11 items-center justify-between gap-3 px-3 py-2.5">
                     <span className="ui-label text-faint">Rol</span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-2 py-1 text-[11px] font-bold text-primary">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-2 py-1 text-[13px] font-bold text-primary">
                       <ShieldCheck className="size-3" aria-hidden="true" />
                       Analitik
                     </span>

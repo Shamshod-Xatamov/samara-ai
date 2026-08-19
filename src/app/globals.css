@@ -62,6 +62,11 @@
   --floating-shadow: 0 18px 48px rgb(23 32 51 / 0.14);
   --transition-fast: 150ms;
   --transition-base: 220ms;
+
+  /* Platform typography scale */
+  --text-micro: 0.6875rem;
+  --text-caption: 0.75rem;
+  --text-body-small: 0.8125rem;
 }
 
 @theme inline {
@@ -175,11 +180,26 @@ a {
 }
 
 .ui-label {
-  font-size: 0.65625rem;
+  font-size: var(--text-micro);
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.ui-micro {
+  font-size: var(--text-micro);
+  line-height: 1rem;
+}
+
+.ui-caption {
+  font-size: var(--text-caption);
+  line-height: 1.125rem;
+}
+
+.ui-body-small {
+  font-size: var(--text-body-small);
+  line-height: 1.25rem;
 }
 
 @keyframes rise-in {

@@ -147,7 +147,7 @@ Komponentlarda tasodifiy hex ranglar yozilmaydi. Bu keyinchalik butun platforma 
 
 Boshqaruv paneli barcha modullarni bitta sahifaga tiqmaydi; umumiy holatni tez tushunishga xizmat qiladi.
 
-### 8.3. Ma'lumotlar manbalari
+### 8.3. Ma'lumotlar manbalari ✅
 
 - Drag-and-drop CSV/XLSX upload
 - Fayl turi va hajmi validatsiyasi
@@ -156,7 +156,7 @@ Boshqaruv paneli barcha modullarni bitta sahifaga tiqmaydi; umumiy holatni tez t
 - `Demo ma'lumot yaratish` amali
 - Oldingi datasetlar ro'yxati
 
-### 8.4. Ma'lumotlarni qayta ishlash
+### 8.4. Ma'lumotlarni qayta ishlash ✅
 
 - Missing value, duplicate, type error va outlier statistikasi
 - Umumiy ma'lumot sifati balli

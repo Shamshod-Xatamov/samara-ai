@@ -101,7 +101,7 @@ function DashboardTooltip({
 
   return (
     <div className="min-w-36 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-floating">
-      <p className="text-[11px] font-semibold text-muted">{label}</p>
+      <p className="text-[13px] font-semibold text-muted">{label}</p>
       <p className="mt-1 font-mono text-sm font-bold text-foreground">
         {formatMetricValue(value)}
         {metric.unit}
@@ -117,7 +117,7 @@ function MetricCard({ metric }: { metric: (typeof dashboardMetrics)[number] }) {
   return (
     <article className="group min-w-0 rounded-lg border border-border bg-surface p-3.5 shadow-card transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md sm:p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-h-8 text-[11px] font-semibold leading-4 text-muted sm:text-xs">
+        <p className="min-h-8 text-[13px] font-semibold leading-4 text-muted">
           {metric.label}
         </p>
         <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-muted text-muted-strong ring-1 ring-inset ring-border/80 transition-colors group-hover:bg-primary-soft group-hover:text-primary">
@@ -130,18 +130,18 @@ function MetricCard({ metric }: { metric: (typeof dashboardMetrics)[number] }) {
           {metric.value}
         </p>
         {"suffix" in metric && (
-          <p className="mb-0.5 truncate text-[10px] font-semibold text-muted">
+          <p className="mb-0.5 truncate text-xs font-semibold text-muted">
             {metric.suffix}
           </p>
         )}
       </div>
 
       <div className="mt-3 flex min-w-0 items-center gap-1.5 border-t border-border pt-2.5">
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-success-soft px-1.5 py-0.5 font-mono text-[9px] font-bold text-success sm:text-[10px]">
+        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-success-soft px-1.5 py-0.5 font-mono text-[11px] font-bold text-success sm:text-xs">
           <TrendIcon className="size-3" aria-hidden="true" />
           {metric.change}
         </span>
-        <span className="truncate text-[9px] text-faint sm:text-[10px]">
+        <span className="truncate text-[11px] text-faint sm:text-xs">
           {metric.comparison}
         </span>
       </div>
@@ -163,7 +163,7 @@ function EfficiencyScore() {
             Umumiy indeks
           </h2>
         </div>
-        <span className="rounded-full bg-accent-soft px-2 py-1 text-[10px] font-bold text-accent">
+        <span className="rounded-full bg-accent-soft px-2 py-1 text-xs font-bold text-accent">
           Demo indeks
         </span>
       </div>
@@ -200,7 +200,7 @@ function EfficiencyScore() {
             <p className="font-mono text-3xl font-bold tracking-[-0.06em] text-foreground">
               {score}
             </p>
-            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-faint">
+            <p className="mt-0.5 text-xs font-bold uppercase tracking-[0.1em] text-faint">
               100 dan
             </p>
           </div>
@@ -211,8 +211,8 @@ function EfficiencyScore() {
         {efficiencyBreakdown.map((item) => (
           <div key={item.label}>
             <div className="mb-1.5 flex items-center justify-between gap-3">
-              <span className="text-[11px] font-medium text-muted">{item.label}</span>
-              <span className="font-mono text-[11px] font-bold text-foreground">
+              <span className="text-[13px] font-medium text-muted">{item.label}</span>
+              <span className="font-mono text-[13px] font-bold text-foreground">
                 {item.value}%
               </span>
             </div>
@@ -248,7 +248,7 @@ export function DashboardView() {
         title="Umumiy ko'rinish"
         description="Asosiy iqtisodiy va texnologik ko'rsatkichlarni bir joyda kuzating."
         action={
-          <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[11px] font-bold text-muted-strong shadow-sm">
+          <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[13px] font-bold text-muted-strong shadow-sm">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-30" />
               <span className="relative inline-flex size-2 rounded-full bg-success" />
@@ -271,7 +271,7 @@ export function DashboardView() {
               <button
                 key={option.key}
                 type="button"
-                className={`h-8 rounded-md px-3 text-[11px] font-bold transition-colors ${
+                className={`h-8 rounded-md px-3 text-[13px] font-bold transition-colors ${
                   isActive
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted hover:bg-surface-muted hover:text-foreground"
@@ -284,7 +284,7 @@ export function DashboardView() {
             );
           })}
         </div>
-        <p className="hidden shrink-0 pr-2 text-[10px] font-medium text-faint md:block">
+        <p className="hidden shrink-0 pr-2 text-xs font-medium text-faint md:block">
           Oxirgi yangilanish: bugun, 20:42
         </p>
       </div>
@@ -312,7 +312,7 @@ export function DashboardView() {
                   {activeMetric.unit}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-[13px] text-muted">
                 {periodLabels[period]} bo&apos;yicha o&apos;zgarish
               </p>
             </div>
@@ -331,7 +331,7 @@ export function DashboardView() {
                     type="button"
                     role="tab"
                     aria-selected={isActive}
-                    className={`h-7 shrink-0 rounded px-2.5 text-[10px] font-bold transition-colors ${
+                    className={`h-7 shrink-0 rounded px-2.5 text-xs font-bold transition-colors ${
                       isActive
                         ? "bg-surface text-foreground shadow-sm ring-1 ring-border/80"
                         : "text-muted hover:text-foreground"
@@ -371,14 +371,14 @@ export function DashboardView() {
                   dataKey="label"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "var(--muted)", fontSize: 10, fontWeight: 600 }}
+                  tick={{ fill: "var(--muted)", fontSize: 11, fontWeight: 600 }}
                   dy={10}
                   minTickGap={14}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "var(--faint)", fontSize: 10, fontWeight: 600 }}
+                  tick={{ fill: "var(--faint)", fontSize: 11, fontWeight: 600 }}
                   domain={[activeMetric.minimum, activeMetric.maximum]}
                   tickFormatter={(value: number) =>
                     Number.isInteger(value) ? String(value) : value.toFixed(1)
@@ -405,11 +405,11 @@ export function DashboardView() {
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3">
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-muted">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
               <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
               Amaldagi natija
             </span>
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-muted">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
               <span className="h-px w-3 border-t border-dashed border-faint" aria-hidden="true" />
               Davr bo&apos;yicha o&apos;zgarish
             </span>
@@ -430,7 +430,7 @@ export function DashboardView() {
             </div>
             <Link
               href="/monitoring"
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-primary transition-colors hover:text-primary-hover"
+              className="inline-flex items-center gap-1 text-[13px] font-bold text-primary transition-colors hover:text-primary-hover"
             >
               Barchasi
               <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -452,11 +452,11 @@ export function DashboardView() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs font-bold text-foreground">{alert.title}</p>
-                      <span className="shrink-0 text-[10px] font-medium text-faint">
+                      <span className="shrink-0 text-xs font-medium text-faint">
                         {alert.time}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] leading-5 text-muted">{alert.detail}</p>
+                    <p className="mt-1 text-[13px] leading-5 text-muted">{alert.detail}</p>
                   </div>
                   <span className={`mt-2 size-1.5 shrink-0 rounded-full ${style.dotClass}`} />
                 </article>
@@ -475,30 +475,30 @@ export function DashboardView() {
             <h2 className="mt-1.5 text-base font-bold leading-6 tracking-[-0.02em] text-foreground">
               Hisobot jarayonini avtomatlashtiring
             </h2>
-            <p className="mt-2 text-[11px] leading-5 text-muted-strong">
+            <p className="mt-2 text-[13px] leading-5 text-muted-strong">
               Haftalik hisobot tayyorlashda 6.8 soat qo&apos;lda bajariladigan takroriy ish aniqlandi.
             </p>
 
             <div className="mt-4 rounded-lg border border-primary/10 bg-surface/75 p-3">
-              <p className="flex items-center gap-1.5 text-[10px] font-bold text-muted-strong">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-muted-strong">
                 <Lightbulb className="size-3.5 text-primary" aria-hidden="true" />
                 Kutilayotgan samara
               </p>
               <div className="mt-2.5 grid grid-cols-2 gap-2">
                 <div>
                   <p className="font-mono text-sm font-bold text-foreground">5.4 soat</p>
-                  <p className="mt-0.5 text-[9px] text-muted">haftalik tejash</p>
+                  <p className="mt-0.5 text-[11px] text-muted">haftalik tejash</p>
                 </div>
                 <div>
                   <p className="font-mono text-sm font-bold text-foreground">+4.2%</p>
-                  <p className="mt-0.5 text-[9px] text-muted">unumdorlik</p>
+                  <p className="mt-0.5 text-[11px] text-muted">unumdorlik</p>
                 </div>
               </div>
             </div>
 
             <Link
               href="/qarorlar"
-              className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-3 text-[11px] font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
+              className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-3 text-[13px] font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
             >
               Tavsiyani ko&apos;rish
               <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -507,7 +507,7 @@ export function DashboardView() {
         </aside>
       </section>
 
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-[10px] leading-5 text-muted shadow-card">
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card">
         <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
         Barcha ko&apos;rsatkichlar demo ma&apos;lumotlari asosida shakllantirilgan. Real manba ulangach ular avtomatik yangilanadi.
       </div>

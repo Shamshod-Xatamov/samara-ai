@@ -128,7 +128,7 @@ function ProductPreview() {
 export function LandingPage() {
   return (
     <main className="relative min-h-svh overflow-hidden bg-surface text-foreground">
-      <header className="absolute inset-x-0 top-0 z-30 px-4 pt-4 sm:px-6">
+      <header className="fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6">
         <nav
           className="relative isolate mx-auto flex h-14 w-full max-w-6xl items-center justify-between overflow-hidden rounded-xl border border-white/80 bg-surface/65 px-3 shadow-floating ring-1 ring-inset ring-border/40 backdrop-blur-2xl backdrop-saturate-150 sm:h-16 sm:px-5"
           aria-label="Asosiy navigatsiya"
@@ -231,7 +231,10 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="natijalar" className="border-b border-border bg-surface">
+      <section
+        id="natijalar"
+        className="scroll-mt-24 border-b border-border bg-surface"
+      >
         <div className="mx-auto grid w-full max-w-7xl grid-cols-2 px-5 py-8 sm:px-7 md:grid-cols-4 lg:px-10">
           {outcomes.map((outcome, index) => (
             <div
@@ -249,7 +252,10 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="imkoniyatlar" className="bg-surface py-20 sm:py-24">
+      <section
+        id="imkoniyatlar"
+        className="scroll-mt-24 bg-surface py-20 sm:py-24"
+      >
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-7 lg:px-10">
           <div className="max-w-2xl">
             <p className="ui-label text-primary">Platforma imkoniyatlari</p>
@@ -282,7 +288,10 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="platforma" className="border-y border-border bg-canvas py-20 sm:py-24">
+      <section
+        id="platforma"
+        className="scroll-mt-24 border-y border-border bg-canvas py-20 sm:py-24"
+      >
         <div className="mx-auto grid w-full max-w-7xl items-center gap-14 px-5 sm:px-7 lg:grid-cols-2 lg:px-10 xl:gap-24">
           <div className="rounded-xl border border-border bg-surface p-5 shadow-card sm:p-7">
             <div className="flex items-center justify-between border-b border-border pb-5">
