@@ -10,6 +10,9 @@ const completedModules = new Set([
   "/qayta-ishlash",
   "/ai-tahlil",
   "/iqtisodiy-samaradorlik",
+  "/monitoring",
+  "/qarorlar",
+  "/hisobotlar",
 ]);
 const moduleItems = navigationItems.filter((item) => !completedModules.has(item.href));
 

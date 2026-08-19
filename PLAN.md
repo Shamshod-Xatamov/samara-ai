@@ -182,7 +182,7 @@ Boshqaruv paneli barcha modullarni bitta sahifaga tiqmaydi; umumiy holatni tez t
 - Kutilayotgan natijani real vaqtda yangilash
 - Formula mavjud bo'lmaguncha demo ekani aniq belgilanadi
 
-### 8.7. Real vaqt monitoringi
+### 8.7. Real vaqt monitoringi ✅
 
 - Normal, ogohlantirish yoki kritik umumiy status
 - Qabul qilingan va qayta ishlangan yozuvlar
@@ -191,7 +191,7 @@ Boshqaruv paneli barcha modullarni bitta sahifaga tiqmaydi; umumiy holatni tez t
 - Jonli grafik va event feed
 - Ogohlantirishlar tarixi
 
-### 8.8. Qarorlarni qo'llab-quvvatlash
+### 8.8. Qarorlarni qo'llab-quvvatlash ✅
 
 - Muammo tavsifi
 - Ehtimoliy sabablar
@@ -200,7 +200,7 @@ Boshqaruv paneli barcha modullarni bitta sahifaga tiqmaydi; umumiy holatni tez t
 - Muhimlik darajasi
 - Tavsiyani ko'rib chiqilgan deb belgilash
 
-### 8.9. Hisobotlar
+### 8.9. Hisobotlar ✅
 
 - Kunlik, haftalik, oylik va iqtisodiy hisobot kartalari
 - Davr tanlash
