@@ -106,14 +106,28 @@ function ProductPreview() {
         </div>
       </div>
 
-      <div className="relative mx-auto h-3 w-[94%] rounded-b-[65%] border-x border-b border-border-strong bg-surface shadow-[0_10px_18px_rgb(23_32_51_/_0.12)] sm:h-4">
-        <span
-          className="absolute left-1/2 top-0 h-1.5 w-16 -translate-x-1/2 rounded-b-md bg-border sm:w-24"
-          aria-hidden="true"
+      <div
+        className="relative z-10 mx-auto -mt-px h-1.5 w-20 rounded-b-full bg-foreground sm:h-2 sm:w-28"
+        aria-hidden="true"
+      />
+
+      <div className="relative mx-auto -mt-1 w-[108%]" aria-hidden="true">
+        <div className="relative h-4 border border-border-strong bg-gradient-to-b from-surface via-border to-border-strong [clip-path:polygon(3%_0,97%_0,100%_100%,0_100%)] sm:h-6">
+          <span className="absolute left-[4%] right-[4%] top-px h-px bg-white/90" />
+          <span
+            className="absolute left-1/2 top-0 h-1.5 w-20 -translate-x-1/2 rounded-b-md border-x border-b border-border-strong bg-surface-muted sm:h-2 sm:w-28"
+          />
+          <span
+            className="absolute bottom-1 left-1/2 h-1 w-12 -translate-x-1/2 rounded-full bg-faint/35 sm:w-16"
+          />
+        </div>
+        <div className="mx-auto h-[3px] w-[98%] rounded-b-[80%] bg-muted-strong/45 shadow-lg sm:h-1" />
+        <div
+          className="absolute -bottom-2 left-1/2 -z-10 h-3 w-[82%] -translate-x-1/2 rounded-full bg-foreground/15 blur-md"
         />
       </div>
 
-      <figcaption className="mt-5 flex items-center justify-center gap-2 text-[10px] font-bold text-muted">
+      <figcaption className="mt-6 flex items-center justify-center gap-2 text-[10px] font-bold text-muted">
         <span className="relative flex size-2" aria-hidden="true">
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-30" />
           <span className="relative inline-flex size-2 rounded-full bg-success" />
