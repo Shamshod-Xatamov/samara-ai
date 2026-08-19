@@ -88,13 +88,21 @@ function ProductPreview() {
         className="absolute -inset-8 -z-10 rounded-[3rem] bg-primary/10 blur-3xl"
         aria-hidden="true"
       />
-      <div className="relative rounded-[1.15rem] border border-foreground/80 bg-foreground p-[6px] shadow-floating sm:rounded-[1.4rem] sm:p-[9px]">
+      <div className="relative rounded-[1.65rem] border border-muted-strong bg-foreground p-[7px] shadow-floating ring-1 ring-inset ring-white/10 sm:rounded-[2rem] sm:p-[10px]">
         <span
-          className="absolute left-1/2 top-[3px] z-20 size-1 -translate-x-1/2 rounded-full bg-faint/60 sm:top-1 sm:size-1.5"
+          className="absolute left-1/2 top-[2px] z-20 size-1 -translate-x-1/2 rounded-full bg-faint/70 sm:top-[3px] sm:size-1.5"
+          aria-hidden="true"
+        />
+        <span
+          className="absolute -right-[3px] top-16 h-10 w-[3px] rounded-r-full bg-muted-strong sm:top-24 sm:h-14"
+          aria-hidden="true"
+        />
+        <span
+          className="absolute -left-[3px] top-20 h-7 w-[3px] rounded-l-full bg-muted-strong sm:top-28 sm:h-10"
           aria-hidden="true"
         />
 
-        <div className="relative aspect-[16/10] overflow-hidden rounded-[0.8rem] bg-background ring-1 ring-white/10 sm:rounded-[0.95rem]">
+        <div className="relative aspect-[4/3] overflow-hidden rounded-[1.15rem] bg-background ring-1 ring-white/10 sm:rounded-[1.4rem]">
           <iframe
             src="/dashboard?preview=landing"
             title="Samara AI boshqaruv panelining faqat ko'rish uchun namoyishi"
@@ -104,27 +112,6 @@ function ProductPreview() {
           />
           <span className="absolute inset-0 z-10" aria-hidden="true" />
         </div>
-      </div>
-
-      <div
-        className="relative z-10 mx-auto -mt-px h-1.5 w-20 rounded-b-full bg-foreground sm:h-2 sm:w-28"
-        aria-hidden="true"
-      />
-
-      <div className="relative mx-auto -mt-1 w-[108%]" aria-hidden="true">
-        <div className="relative h-4 border border-border-strong bg-gradient-to-b from-surface via-border to-border-strong [clip-path:polygon(3%_0,97%_0,100%_100%,0_100%)] sm:h-6">
-          <span className="absolute left-[4%] right-[4%] top-px h-px bg-white/90" />
-          <span
-            className="absolute left-1/2 top-0 h-1.5 w-20 -translate-x-1/2 rounded-b-md border-x border-b border-border-strong bg-surface-muted sm:h-2 sm:w-28"
-          />
-          <span
-            className="absolute bottom-1 left-1/2 h-1 w-12 -translate-x-1/2 rounded-full bg-faint/35 sm:w-16"
-          />
-        </div>
-        <div className="mx-auto h-[3px] w-[98%] rounded-b-[80%] bg-muted-strong/45 shadow-lg sm:h-1" />
-        <div
-          className="absolute -bottom-2 left-1/2 -z-10 h-3 w-[82%] -translate-x-1/2 rounded-full bg-foreground/15 blur-md"
-        />
       </div>
 
       <figcaption className="mt-6 flex items-center justify-center gap-2 text-[10px] font-bold text-muted">
