@@ -127,31 +127,53 @@ function ProductPreview() {
 
 export function LandingPage() {
   return (
-    <main className="min-h-svh overflow-hidden bg-surface text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border/80 bg-surface/90 backdrop-blur-xl">
+    <main className="relative min-h-svh overflow-hidden bg-surface text-foreground">
+      <header className="absolute inset-x-0 top-0 z-30 px-4 pt-4 sm:px-6">
         <nav
-          className="mx-auto flex h-[4.5rem] w-full max-w-7xl items-center justify-between px-5 sm:px-7 lg:px-10"
+          className="relative isolate mx-auto flex h-14 w-full max-w-6xl items-center justify-between overflow-hidden rounded-xl border border-white/80 bg-surface/65 px-3 shadow-floating ring-1 ring-inset ring-border/40 backdrop-blur-2xl backdrop-saturate-150 sm:h-16 sm:px-5"
           aria-label="Asosiy navigatsiya"
         >
-          <Link href="/" aria-label="Samara AI bosh sahifasi">
+          <span
+            className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white"
+            aria-hidden="true"
+          />
+          <span
+            className="pointer-events-none absolute -left-10 -top-14 size-28 rounded-full bg-primary/10 blur-2xl"
+            aria-hidden="true"
+          />
+
+          <Link
+            href="/"
+            className="relative z-10 rounded-md"
+            aria-label="Samara AI bosh sahifasi"
+          >
             <BrandMark showSubtitle={false} />
           </Link>
 
-          <div className="hidden items-center gap-8 md:flex">
-            <a className="text-xs font-semibold text-muted-strong transition-colors hover:text-foreground" href="#imkoniyatlar">
+          <div className="relative z-10 hidden items-center gap-1 rounded-full border border-white/60 bg-white/35 p-1 md:flex">
+            <a
+              className="rounded-full px-3 py-1.5 text-xs font-semibold text-muted-strong transition-colors hover:bg-white/75 hover:text-foreground"
+              href="#imkoniyatlar"
+            >
               Imkoniyatlar
             </a>
-            <a className="text-xs font-semibold text-muted-strong transition-colors hover:text-foreground" href="#platforma">
+            <a
+              className="rounded-full px-3 py-1.5 text-xs font-semibold text-muted-strong transition-colors hover:bg-white/75 hover:text-foreground"
+              href="#platforma"
+            >
               Platforma
             </a>
-            <a className="text-xs font-semibold text-muted-strong transition-colors hover:text-foreground" href="#natijalar">
+            <a
+              className="rounded-full px-3 py-1.5 text-xs font-semibold text-muted-strong transition-colors hover:bg-white/75 hover:text-foreground"
+              href="#natijalar"
+            >
               Natijalar
             </a>
           </div>
 
           <Link
             href="/kirish"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-xs font-bold text-white shadow-sm transition-[background-color,transform] hover:bg-primary-hover active:translate-y-px"
+            className="relative z-10 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-xs font-bold text-white shadow-sm transition-[background-color,transform,box-shadow] hover:bg-primary-hover hover:shadow-md active:translate-y-px"
           >
             Tizimga kirish
             <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -164,7 +186,7 @@ export function LandingPage() {
           className="pointer-events-none absolute left-1/2 top-[-20rem] size-[42rem] -translate-x-1/2 rounded-full bg-primary/8 blur-3xl"
           aria-hidden="true"
         />
-        <div className="relative mx-auto grid w-full max-w-7xl items-center gap-14 px-5 py-16 sm:px-7 sm:py-20 lg:grid-cols-[0.86fr_1.14fr] lg:px-10 lg:py-24 xl:gap-20 xl:py-28">
+        <div className="relative mx-auto grid w-full max-w-7xl items-center gap-14 px-5 pb-16 pt-32 sm:px-7 sm:pb-20 sm:pt-36 lg:grid-cols-[0.86fr_1.14fr] lg:px-10 lg:pb-24 lg:pt-36 xl:gap-20 xl:pb-28 xl:pt-40">
           <div className="max-w-xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary-soft px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-primary">
               <Sparkles className="size-3.5" aria-hidden="true" />
