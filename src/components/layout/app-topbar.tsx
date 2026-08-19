@@ -16,12 +16,30 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import {
+  defaultSettings,
+  readStoredSettings,
+  SETTINGS_UPDATED_EVENT,
+  type AppSettings,
+} from "@/data/settings";
+
 type AppTopbarProps = {
   mobileMenuOpen: boolean;
   onOpenMenu: () => void;
 };
 
 type OpenMenu = "notifications" | "account" | null;
+
+function getInitials(name: string) {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "AK"
+  );
+}
 
 export function AppTopbar({
   mobileMenuOpen,
@@ -30,6 +48,29 @@ export function AppTopbar({
   const router = useRouter();
   const menusRef = useRef<HTMLDivElement>(null);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  const [account, setAccount] = useState({
+    profile: defaultSettings.profile,
+    organization: defaultSettings.organization,
+  });
+
+  useEffect(() => {
+    function applySettings(settings: AppSettings) {
+      setAccount({
+        profile: settings.profile,
+        organization: settings.organization,
+      });
+    }
+
+    function handleSettingsUpdate(event: Event) {
+      const customEvent = event as CustomEvent<AppSettings>;
+      applySettings(customEvent.detail ?? readStoredSettings());
+    }
+
+    applySettings(readStoredSettings());
+    window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdate);
+
+    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdate);
+  }, []);
 
   useEffect(() => {
     if (!openMenu) return;
@@ -90,7 +131,7 @@ export function AppTopbar({
           <ChevronRight className="size-3.5 text-faint" aria-hidden="true" />
           <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
             <Building2 className="size-3.5 text-faint" aria-hidden="true" />
-            Demo tashkilot
+            {account.organization.name}
           </span>
         </nav>
       </div>
@@ -181,16 +222,16 @@ export function AppTopbar({
             type="button"
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface pl-1.5 pr-2.5 text-sm text-foreground shadow-sm transition-all duration-150 hover:border-border-strong hover:bg-surface-muted"
             onClick={() => toggleMenu("account")}
-            aria-label="Foydalanuvchi profili: Aziz Karimov"
+            aria-label={`Foydalanuvchi profili: ${account.profile.fullName}`}
             aria-expanded={openMenu === "account"}
             aria-haspopup="dialog"
             aria-controls="account-popover"
           >
             <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft font-mono text-xs font-bold text-primary ring-1 ring-inset ring-primary/15">
-              AK
+              {getInitials(account.profile.fullName)}
             </span>
             <span className="hidden max-w-36 truncate text-[12px] font-bold sm:inline">
-              Aziz Karimov
+              {account.profile.fullName}
             </span>
             <ChevronDown
               className={`size-3.5 text-faint transition-transform duration-150 ${
@@ -210,14 +251,14 @@ export function AppTopbar({
               <div className="p-4">
                 <div className="flex items-center gap-3">
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-soft font-mono text-xs font-bold text-primary ring-1 ring-inset ring-primary/20">
-                    AK
+                    {getInitials(account.profile.fullName)}
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-foreground">
-                      Aziz Karimov
+                      {account.profile.fullName}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-muted">
-                      analitik@tashkilot.uz
+                      {account.profile.email}
                     </p>
                   </div>
                 </div>
@@ -227,13 +268,13 @@ export function AppTopbar({
                     <span className="ui-label text-faint">Rol</span>
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-2 py-1 text-[13px] font-bold text-primary">
                       <ShieldCheck className="size-3" aria-hidden="true" />
-                      Analitik
+                      {account.profile.role}
                     </span>
                   </div>
                   <div className="flex min-h-11 items-center justify-between gap-3 border-t border-border px-3 py-2.5">
                     <span className="ui-label text-faint">Tashkilot</span>
                     <span className="truncate text-xs font-semibold text-foreground">
-                      Demo tashkilot
+                      {account.organization.name}
                     </span>
                   </div>
                 </div>

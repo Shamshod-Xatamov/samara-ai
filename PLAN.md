@@ -208,7 +208,7 @@ Boshqaruv paneli barcha modullarni bitta sahifaga tiqmaydi; umumiy holatni tez t
 - Demo PDF/XLSX/CSV eksport amallari
 - Oldingi hisobotlar ro'yxati
 
-### 8.10. Sozlamalar
+### 8.10. Sozlamalar ✅
 
 - Foydalanuvchi ma'lumotlari
 - Tashkilot nomi
