@@ -164,15 +164,15 @@ Boshqaruv paneli barcha modullarni bitta sahifaga tiqmaydi; umumiy holatni tez t
 - `Tozalash va qayta ishlash` amali
 - Jarayon progress'i va yakuniy natija
 
-### 8.5. AI tahlili
+### 8.5. AI tahlili ✅
 
 - `Prognozlash` va `Anomaliyalar` tablari
-- 7/30/90 kunlik davr tanlash
+- 7/30 kunlik va maxsus davr tanlash
 - Haqiqiy va prognoz qiymatlari grafigi
 - Aniqlangan anomaliyalar ro'yxati
 - Daraja, vaqt va ta'sir ko'rsatkichlari
 
-### 8.6. Iqtisodiy samaradorlik
+### 8.6. Iqtisodiy samaradorlik ✅
 
 - Iqtisodiy samaradorlik indeksi (EES)
 - ROI, cost saving, labor saving va productivity KPI'lari
