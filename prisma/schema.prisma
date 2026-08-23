@@ -1,0 +1,313 @@
+// Samara AI — ma'lumotlar bazasi sxemasi
+// Reja: BACKEND_PLAN.md, 2-bo'lim
+//
+// 1-bosqich: tashkilot, foydalanuvchi, sessiya va sozlamalar.
+// 2-bosqich: dataset, ustunlar, qatorlar, sifat muammolari va tozalash.
+// Metrika, AI va hisobot jadvallari keyingi bosqichlarda qo'shiladi.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Korxona / tashkilot. Barcha ma'lumot shu birlik ichida ajratiladi.
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  sector    String   @default("Ishlab chiqarish")
+  timezone  String   @default("Asia/Tashkent (UTC+5)")
+  currency  String   @default("UZS — O'zbekiston so'mi")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users    User[]
+  settings OrgSettings?
+  datasets Dataset[]
+
+  @@map("organizations")
+}
+
+enum UserRole {
+  ADMIN
+  ANALYST
+  VIEWER
+
+  @@map("user_role")
+}
+
+/// Platforma foydalanuvchisi. Ro'yxatdan o'tish yo'q — hisoblar seed yoki admin orqali yaratiladi.
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  orgId        String    @map("org_id") @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  fullName     String    @map("full_name")
+  role         UserRole  @default(ANALYST)
+  language     String    @default("O'zbekcha")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sessions Session[]
+  datasets Dataset[]
+
+  @@index([orgId])
+  @@map("users")
+}
+
+/// Bazadagi sessiya. Cookie'da faqat shu yozuvning imzolangan ID'si saqlanadi,
+/// shuning uchun sessiyani serverdan bekor qilish mumkin.
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  userAgent String?  @map("user_agent")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Tashkilot sozlamalari. Tuzilishi src/data/settings.ts dagi AppSettings tipiga mos.
+model OrgSettings {
+  orgId            String   @id @map("org_id") @db.Uuid
+  thresholds       Json
+  notifications    Json
+  eesConfig        Json     @map("ees_config")
+  aiInvestmentCost Decimal? @map("ai_investment_cost") @db.Decimal(14, 2)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("org_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Ma'lumot pipeline
+// ---------------------------------------------------------------------------
+
+enum DatasetFormat {
+  CSV
+  XLSX
+
+  @@map("dataset_format")
+}
+
+enum DatasetStatus {
+  /// Fayl yuklandi, profiling boshlanmadi
+  UPLOADED
+  /// Ustun statistikasi va sifat muammolari hisoblandi
+  PROFILED
+  /// Ustunlar kanonik sxemaga bog'landi
+  MAPPED
+  /// Tozalash yakunlandi
+  CLEANED
+  FAILED
+
+  @@map("dataset_status")
+}
+
+enum ColumnType {
+  DATE
+  NUMBER
+  TEXT
+  BOOLEAN
+  UNKNOWN
+
+  @@map("column_type")
+}
+
+enum MappingSource {
+  AI
+  USER
+  HEURISTIC
+
+  @@map("mapping_source")
+}
+
+enum IssueType {
+  MISSING
+  DUPLICATE
+  TYPE_ERROR
+  OUTLIER
+
+  @@map("issue_type")
+}
+
+enum IssueSeverity {
+  HIGH
+  MEDIUM
+  LOW
+
+  @@map("issue_severity")
+}
+
+enum CleaningStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+
+  @@map("cleaning_status")
+}
+
+/// Yuklangan CSV/XLSX fayl va uning holati.
+model Dataset {
+  id                  String        @id @default(uuid()) @db.Uuid
+  orgId               String        @map("org_id") @db.Uuid
+  name                String
+  originalFilename    String        @map("original_filename")
+  format              DatasetFormat
+  sizeBytes           Int           @map("size_bytes")
+  rowCount            Int           @map("row_count")
+  columnCount         Int           @map("column_count")
+  status              DatasetStatus @default(UPLOADED)
+  /// Yuklangan holatdagi sifat balli (0–100)
+  qualityScore        Int?          @map("quality_score")
+  /// Tozalashdan oldin tahlilga yaroqli bo'lgan qatorlar soni
+  validRowCount       Int?          @map("valid_row_count")
+  /// Tozalashdan keyingi sifat balli
+  cleanedQualityScore Int?          @map("cleaned_quality_score")
+  uploadedById        String?       @map("uploaded_by_id") @db.Uuid
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  org          Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  uploadedBy   User?           @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  columns      DatasetColumn[]
+  rows         DatasetRow[]
+  issues       QualityIssue[]
+  cleaningRuns CleaningRun[]
+
+  @@index([orgId, createdAt])
+  @@map("datasets")
+}
+
+/// Fayldagi bitta ustun: statistikasi va kanonik sxemaga bog'lanishi.
+model DatasetColumn {
+  id         String     @id @default(uuid()) @db.Uuid
+  datasetId  String     @map("dataset_id") @db.Uuid
+  position   Int
+  /// Fayldagi asl sarlavha, masalan "Ishlab chiqarish xarajati (mln so'm)"
+  sourceName String     @map("source_name")
+  /// Kanonik kalit, masalan "xarajat" (src/lib/parsing/canonical.ts)
+  canonicalKey String?  @map("canonical_key")
+  dataType   ColumnType @default(UNKNOWN) @map("data_type")
+
+  nullCount     Int    @default(0) @map("null_count")
+  distinctCount Int    @default(0) @map("distinct_count")
+  invalidCount  Int    @default(0) @map("invalid_count")
+  minValue      Float? @map("min_value")
+  maxValue      Float? @map("max_value")
+  meanValue     Float? @map("mean_value")
+  stdDev        Float? @map("std_dev")
+  /// Chorak qiymatlar — outlier chegarasini hisoblash uchun
+  q1            Float?
+  q3            Float?
+  sampleValues  Json   @map("sample_values")
+
+  mappingConfidence Int?           @map("mapping_confidence")
+  mappedBy          MappingSource? @map("mapped_by")
+  mappingReason     String?        @map("mapping_reason")
+  /// O'lchov birligini kanonik birlikka keltirish koeffitsienti.
+  /// Masalan "xarajat_som" so'mda bo'lsa, mln so'mga o'tish uchun 0.000001.
+  unitScale         Float?         @map("unit_scale")
+
+  dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetId, position])
+  @@index([datasetId])
+  @@map("dataset_columns")
+}
+
+/// Fayldagi bitta qator. `raw` — o'zgartirilmagan holat, `clean` — tozalangandan keyin.
+model DatasetRow {
+  id        String @id @default(uuid()) @db.Uuid
+  datasetId String @map("dataset_id") @db.Uuid
+  rowIndex  Int    @map("row_index")
+  raw       Json
+  clean     Json?
+  /// Shu qatorda topilgan muammolar ro'yxati
+  issues    Json?
+  isDuplicate Boolean @default(false) @map("is_duplicate")
+
+  dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetId, rowIndex])
+  @@index([datasetId])
+  @@map("dataset_rows")
+}
+
+/// Aniqlangan sifat muammosi — ustun va tur kesimida jamlangan.
+model QualityIssue {
+  id          String        @id @default(uuid()) @db.Uuid
+  datasetId   String        @map("dataset_id") @db.Uuid
+  columnName  String?       @map("column_name")
+  issueType   IssueType     @map("issue_type")
+  count       Int
+  affectedPct Float         @map("affected_pct")
+  severity    IssueSeverity
+  /// Deterministik tavsiya (masalan "Median bilan to'ldirish")
+  suggestedFix String       @map("suggested_fix")
+  /// Gemini yozgan izoh — bo'lmasligi mumkin
+  aiRationale  String?      @map("ai_rationale")
+  applied      Boolean      @default(false)
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([datasetId])
+  @@map("quality_issues")
+}
+
+/// Gemini javoblari keshi.
+/// Bir xil kirish uchun API qayta chaqirilmaydi — bu ham tezlik, ham xarajat masalasi.
+model AiCache {
+  id        String    @id @default(uuid()) @db.Uuid
+  orgId     String?   @map("org_id") @db.Uuid
+  /// Vazifa turi: "column-mapping", "quality-strategy", ...
+  task      String
+  /// task + kirish ma'lumotining SHA-256 hash'i
+  cacheKey  String    @unique @map("cache_key")
+  model     String
+  response  Json
+  tokensIn  Int?      @map("tokens_in")
+  tokensOut Int?      @map("tokens_out")
+  latencyMs Int?      @map("latency_ms")
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime? @map("expires_at")
+
+  @@index([task])
+  @@index([orgId])
+  @@map("ai_cache")
+}
+
+/// Tozalash jarayoni: oldin/keyin ko'rsatkichlari va bosqichlar logi.
+model CleaningRun {
+  id               String         @id @default(uuid()) @db.Uuid
+  datasetId        String         @map("dataset_id") @db.Uuid
+  status           CleaningStatus @default(RUNNING)
+  qualityBefore    Int            @map("quality_before")
+  qualityAfter     Int?           @map("quality_after")
+  validRowsBefore  Int            @map("valid_rows_before")
+  validRowsAfter   Int?           @map("valid_rows_after")
+  /// Bosqich nomlari va har birida bajarilgan amallar
+  stageLog         Json?          @map("stage_log")
+  errorMessage     String?        @map("error_message")
+  startedAt        DateTime       @default(now()) @map("started_at")
+  finishedAt       DateTime?      @map("finished_at")
+
+  dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([datasetId])
+  @@map("cleaning_runs")
+}

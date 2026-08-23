@@ -32,6 +32,7 @@ import {
   SETTINGS_UPDATED_EVENT,
   type AppSettings,
 } from "@/data/settings";
+import { logout } from "@/services/auth";
 
 type SettingsTab = "profile" | "organization" | "thresholds" | "notifications";
 
@@ -598,9 +599,10 @@ export function SettingsView() {
     }, 620);
   }
 
-  function handleLogout() {
-    sessionStorage.removeItem("ai-samaradorlik-foydalanuvchi");
+  async function handleLogout() {
+    await logout();
     router.replace("/kirish");
+    router.refresh();
   }
 
   return (
