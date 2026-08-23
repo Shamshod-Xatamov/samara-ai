@@ -29,6 +29,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { DemoNotice } from "@/components/ui/demo-notice";
 import {
   DateRangePicker,
   type DateRangeValue,
@@ -753,6 +754,11 @@ export function ReportsView() {
             3 ta avtomatik hisobot
           </div>
         }
+      />
+
+      <DemoNotice
+        title="Bu sahifa namoyish rejimida ishlaydi"
+        description="Hisobot mazmuni oldindan tayyorlangan namuna ma'lumotdan olinadi va bazadagi haqiqiy ko'rsatkichlarga bog'lanmagan. Real hisobot generatsiyasi (PDF/XLSX va AI xulosasi) keyingi bosqichda qo'shiladi."
       />
 
       <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Hisobotlar umumiy ko'rsatkichlari">

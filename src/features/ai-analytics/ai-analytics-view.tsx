@@ -2,36 +2,24 @@
 
 import Link from "next/link";
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
   BrainCircuit,
-  ChartNoAxesCombined,
-  CheckCircle2,
   Database,
   Info,
   LoaderCircle,
   RefreshCw,
   ScanSearch,
-  ShieldAlert,
   Sparkles,
-  Target,
   TrendingDown,
   TrendingUp,
-  WalletCards,
-  type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  Bar,
-  BarChart,
+  Area,
   CartesianGrid,
-  Cell,
+  ComposedChart,
   Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -39,941 +27,761 @@ import {
 } from "recharts";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { formatDate, formatNumber } from "@/lib/format";
 import {
-  DateRangePicker,
-  formatCompactDateRange,
-  type DateRangeValue,
-} from "@/components/ui/date-range-picker";
-import {
-  aiPeriods,
-  anomalies,
-  forecastData,
-  forecastMetrics,
-  type AiPeriodKey,
-  type AnomalySeverity,
-  type AnomalyTrendPoint,
-  type ForecastMetricKey,
-  type ForecastPoint,
-} from "@/data/ai-analytics";
+  explainAnomaly,
+  getAnomalies,
+  getForecast,
+  type AnomaliesResponse,
+  type AnomalyItem,
+  type ForecastResponse,
+} from "@/services/ai";
 
-type AnalysisTab = "forecast" | "anomalies";
-type SeverityFilter = "all" | AnomalySeverity;
+type Tab = "forecast" | "anomalies";
 
-const DEMO_TODAY = new Date(2026, 7, 19);
-const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-4)"];
-
-function addDemoDays(date: Date, days: number) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
-}
-
-const FORECAST_START_DATE = addDemoDays(DEMO_TODAY, 1);
-const FORECAST_END_DATE = addDemoDays(DEMO_TODAY, 30);
-
-const forecastDatePresets = [
-  { label: "Keyingi 7 kun", from: FORECAST_START_DATE, to: addDemoDays(DEMO_TODAY, 7) },
-  { label: "Keyingi 30 kun", from: FORECAST_START_DATE, to: addDemoDays(DEMO_TODAY, 30) },
-];
-
-function getPeriodForRange(range: DateRangeValue): AiPeriodKey {
-  const days = Math.round((range.to.getTime() - range.from.getTime()) / 86_400_000) + 1;
-  if (days <= 7) return "seven";
-  return "thirty";
-}
+const HORIZONS = [7, 14, 30];
 
 const severityStyles: Record<
-  AnomalySeverity,
-  {
-    label: string;
-    icon: LucideIcon;
-    badgeClass: string;
-    iconClass: string;
-    dotClass: string;
-  }
+  AnomalyItem["severity"],
+  { label: string; badge: string; dot: string }
 > = {
-  critical: {
+  CRITICAL: {
     label: "Kritik",
-    icon: ShieldAlert,
-    badgeClass: "bg-danger-soft text-danger",
-    iconClass: "bg-danger-soft text-danger",
-    dotClass: "bg-danger",
+    badge: "bg-danger-soft text-danger",
+    dot: "bg-danger",
   },
-  warning: {
+  WARNING: {
     label: "Ogohlantirish",
-    icon: AlertTriangle,
-    badgeClass: "bg-warning-soft text-warning",
-    iconClass: "bg-warning-soft text-warning",
-    dotClass: "bg-warning",
+    badge: "bg-warning-soft text-warning",
+    dot: "bg-warning",
   },
-  info: {
-    label: "Kuzatuv",
-    icon: Info,
-    badgeClass: "bg-info-soft text-info",
-    iconClass: "bg-info-soft text-info",
-    dotClass: "bg-info",
-  },
+  INFO: { label: "Kuzatuv", badge: "bg-info-soft text-info", dot: "bg-info" },
 };
 
-function formatForecastValue(
-  value: number,
-  metric: (typeof forecastMetrics)[number],
-) {
-  const formatted = value.toFixed(metric.decimals);
-  return metric.unit === "%" ? `${formatted}%` : `${formatted} ${metric.unit}`;
-}
-
-function formatAxisValue(value: number) {
-  if (value >= 10000) return `${Math.round(value / 1000)}k`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function ForecastTooltip({
-  active,
-  payload,
-  label,
-  metric,
-}: {
-  active?: boolean;
-  payload?: Array<{
-    dataKey?: string | number;
-    value?: number | string;
-    payload?: ForecastPoint;
-  }>;
-  label?: string | number;
-  metric: (typeof forecastMetrics)[number];
-}) {
-  const visibleItems = payload?.filter((item) => item.value !== null && item.value !== undefined);
-
-  if (!active || !visibleItems?.length) return null;
-
+function EmptyState({ message }: { message: string }) {
   return (
-    <div className="min-w-44 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-floating">
-      <p className="text-xs font-bold text-muted">{label}</p>
-      <div className="mt-2 space-y-1.5">
-        {visibleItems.map((item) => {
-          const isActual = item.dataKey === "actual";
-          const value = Number(item.value ?? 0);
-
-          return (
-            <div className="flex items-center justify-between gap-4" key={String(item.dataKey)}>
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted">
-                <span
-                  className={`size-2 rounded-full ${isActual ? "bg-primary" : "bg-accent"}`}
-                  aria-hidden="true"
-                />
-                {isActual ? "Haqiqiy" : "Prognoz"}
-              </span>
-              <span className="font-mono text-xs font-bold text-foreground">
-                {formatForecastValue(value, metric)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+    <div className="mt-6 grid min-h-56 place-content-center rounded-lg border border-dashed border-border-strong bg-surface p-8 text-center shadow-card">
+      <Database className="mx-auto size-7 text-faint" aria-hidden="true" />
+      <h2 className="mt-4 text-sm font-bold text-foreground">Tahlil uchun ma&apos;lumot yo&apos;q</h2>
+      <p className="mt-1.5 max-w-md text-[13px] leading-5 text-muted">{message}</p>
+      <Link
+        href="/malumotlar"
+        className="mx-auto mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
+      >
+        Ma&apos;lumot manbalariga o&apos;tish
+        <ArrowRight className="size-3.5" aria-hidden="true" />
+      </Link>
     </div>
-  );
-}
-
-function AnomalyTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{
-    dataKey?: string | number;
-    value?: number | string;
-    payload?: AnomalyTrendPoint;
-  }>;
-  label?: string | number;
-}) {
-  if (!active || !payload?.length) return null;
-
-  return (
-    <div className="min-w-40 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-floating">
-      <p className="text-xs font-bold text-muted">{label}</p>
-      <div className="mt-2 space-y-1.5">
-        {payload.map((item) => (
-          <div className="flex items-center justify-between gap-4" key={String(item.dataKey)}>
-            <span className="text-xs font-medium text-muted">
-              {item.dataKey === "actual" ? "Haqiqiy" : "Kutilgan"}
-            </span>
-            <span className="font-mono text-xs font-bold text-foreground">
-              {formatAxisValue(Number(item.value ?? 0))}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FactorTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{ name?: string; value?: number | string }>;
-}) {
-  const item = payload?.[0];
-  if (!active || !item) return null;
-
-  return (
-    <div className="rounded-md border border-border bg-surface px-2.5 py-2 shadow-floating">
-      <p className="text-[11px] font-semibold text-muted">{item.name}</p>
-      <p className="mt-0.5 font-mono text-xs font-bold text-foreground">{item.value}%</p>
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: LucideIcon;
-  tone?: "neutral" | "primary" | "success" | "danger";
-}) {
-  const iconClass = {
-    neutral: "bg-surface-muted text-muted-strong",
-    primary: "bg-primary-soft text-primary",
-    success: "bg-success-soft text-success",
-    danger: "bg-danger-soft text-danger",
-  }[tone];
-
-  return (
-    <article className="rounded-lg border border-border bg-surface p-3.5 shadow-card sm:p-4">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[13px] font-semibold text-muted">{label}</p>
-        <span className={`grid size-8 shrink-0 place-items-center rounded-md ${iconClass}`}>
-          <Icon className="size-4" strokeWidth={1.9} aria-hidden="true" />
-        </span>
-      </div>
-      <p className="mt-3 font-mono text-xl font-bold tracking-[-0.045em] text-foreground sm:text-[1.4rem]">
-        {value}
-      </p>
-      <p className="mt-1 text-xs font-medium text-muted">{detail}</p>
-    </article>
   );
 }
 
 function ForecastPanel() {
-  const [period, setPeriod] = useState<AiPeriodKey>("thirty");
-  const [customRange, setCustomRange] = useState<DateRangeValue | null>(null);
-  const [metricKey, setMetricKey] = useState<ForecastMetricKey>("operatingCost");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshCount, setRefreshCount] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState("bugun, 20:42");
+  const [metricKey, setMetricKey] = useState("xarajat");
+  const [horizon, setHorizon] = useState(7);
+  const [data, setData] = useState<ForecastResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isRefreshing) return;
+    let cancelled = false;
 
-    const timer = window.setTimeout(() => {
-      setIsRefreshing(false);
-      setRefreshCount((current) => current + 1);
-      setLastUpdated("hozirgina");
-    }, 900);
+    void getForecast(metricKey, horizon).then((response) => {
+      if (cancelled) return;
 
-    return () => window.clearTimeout(timer);
-  }, [isRefreshing]);
+      setIsLoading(false);
 
-  const metric = useMemo(
-    () => forecastMetrics.find((item) => item.key === metricKey) ?? forecastMetrics[0],
-    [metricKey],
-  );
-  const effectivePeriod = customRange ? getPeriodForRange(customRange) : period;
-  const periodData = forecastData[effectivePeriod];
-  const series = periodData.series[metricKey];
-  const currentValue = [...series].reverse().find((point) => point.actual !== null)?.actual ?? 0;
-  const predictedValue = [...series].reverse().find((point) => point.predicted !== null)?.predicted ?? 0;
-  const rawChange = ((predictedValue - currentValue) / currentValue) * 100;
-  const isPositive = metric.positiveWhen === "up" ? rawChange >= 0 : rawChange <= 0;
-  const confidence = Math.min(99.4, periodData.confidence + refreshCount * 0.1);
-  const selectedPeriodLabel = customRange
-    ? formatCompactDateRange(customRange)
-    : (aiPeriods.find((item) => item.key === period)?.label ?? "30 kun");
-  const ChangeIcon = rawChange >= 0 ? TrendingUp : TrendingDown;
+      if (!response.ok) {
+        setError(response.message);
+        setData(null);
+        return;
+      }
+
+      setError("");
+      setData(response.data);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [metricKey, horizon]);
+
+  if (isLoading && !data) {
+    return (
+      <div className="grid min-h-64 place-content-center text-center">
+        <LoaderCircle className="mx-auto size-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="mt-3 text-xs font-medium text-muted">Prognoz hisoblanmoqda...</p>
+      </div>
+    );
+  }
+
+  if (!data) return <EmptyState message={error} />;
+
+  const { forecast, metric, insight } = data;
+  const TrendIcon = forecast.direction === "up" ? TrendingUp : TrendingDown;
+  const isPositive =
+    forecast.direction === "flat"
+      ? true
+      : metric.positiveWhen === "up"
+        ? forecast.direction === "up"
+        : forecast.direction === "down";
 
   return (
-    <div role="tabpanel" aria-label="Prognozlash">
-      <section className="mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3" aria-label="Prognoz ko'rsatkichlari">
-        <SummaryCard
-          label="Joriy natija"
-          value={formatForecastValue(currentValue, metric)}
-          detail="oxirgi haqiqiy qiymat"
-          icon={Activity}
-        />
-        <SummaryCard
-          label={`${selectedPeriodLabel} prognozi`}
-          value={formatForecastValue(predictedValue, metric)}
-          detail="davr yakunidagi qiymat"
-          icon={ChartNoAxesCombined}
-          tone="primary"
-        />
-        <SummaryCard
-          label="Kutilayotgan o'zgarish"
-          value={`${rawChange > 0 ? "+" : ""}${rawChange.toFixed(1)}%`}
-          detail={isPositive ? "ijobiy yo'nalish" : "e'tibor talab qiladi"}
-          icon={ChangeIcon}
-          tone={isPositive ? "success" : "danger"}
-        />
-        <SummaryCard
-          label="Model ishonchi"
-          value={`${confidence.toFixed(1)}%`}
-          detail="validatsiya natijasi"
-          icon={Target}
-          tone="success"
-        />
+    <>
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-card sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-md bg-surface-muted p-1" role="tablist">
+          {data.availableMetrics.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={item.key === metricKey}
+              onClick={() => setMetricKey(item.key)}
+              className={`h-8 shrink-0 rounded px-3 text-xs font-bold transition-colors ${
+                item.key === metricKey
+                  ? "bg-surface text-foreground shadow-sm ring-1 ring-border/80"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {item.shortLabel}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1 rounded-md bg-surface-muted p-1">
+          {HORIZONS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setHorizon(value)}
+              aria-pressed={horizon === value}
+              className={`h-8 rounded px-3 text-xs font-bold transition-colors ${
+                horizon === value
+                  ? "bg-surface text-foreground shadow-sm ring-1 ring-border/80"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {value} kun
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <section className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
+        {[
+          {
+            label: "Kutilayotgan o'zgarish",
+            value:
+              forecast.changePct === null
+                ? "—"
+                : `${forecast.changePct > 0 ? "+" : ""}${formatNumber(forecast.changePct, 1)}%`,
+            detail: `${horizon} kun ichida`,
+            tone: isPositive ? "success" : "danger",
+          },
+          {
+            label: "Model ishonchi",
+            value: forecast.confidence === null ? "—" : `${formatNumber(forecast.confidence, 1)}%`,
+            detail: `MAPE ${formatNumber(forecast.mape, 1)}%`,
+            tone: "primary",
+          },
+          {
+            label: "Model",
+            value: forecast.model === "holt-winters" ? "Holt-Winters" : "Holt",
+            detail:
+              forecast.seasonLength !== null
+                ? `mavsum ${forecast.seasonLength} kun`
+                : "mavsumiylik yo'q",
+            tone: "primary",
+          },
+          {
+            label: "Parametrlar",
+            value: `α ${forecast.alpha}`,
+            detail: `β ${forecast.beta}${forecast.gamma !== null ? ` · γ ${forecast.gamma}` : ""}`,
+            tone: "primary",
+          },
+        ].map((card) => (
+          <article className="rounded-lg border border-border bg-surface p-3.5 shadow-card sm:p-4" key={card.label}>
+            <p className="text-xs font-bold uppercase tracking-[0.07em] text-faint">{card.label}</p>
+            <p
+              className={`mt-2.5 truncate font-mono text-xl font-bold tracking-[-0.045em] sm:text-[1.4rem] ${
+                card.tone === "success"
+                  ? "text-success"
+                  : card.tone === "danger"
+                    ? "text-danger"
+                    : "text-foreground"
+              }`}
+            >
+              {card.value}
+            </p>
+            <p className="mt-1 text-xs font-medium text-muted">{card.detail}</p>
+          </article>
+        ))}
       </section>
 
-      <section className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+      <section className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0 rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
-              <p className="ui-label text-faint">Haqiqiy va prognoz</p>
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <h2 className="text-base font-bold tracking-[-0.02em] text-foreground">
-                  {metric.label}
-                </h2>
-                <span className="font-mono text-sm font-bold text-primary">
-                  {formatForecastValue(predictedValue, metric)}
-                </span>
-              </div>
-              <p className="mt-1 text-[13px] text-muted">
-                {selectedPeriodLabel} uchun AI prognozi
-              </p>
-            </div>
-
-            <div className="flex shrink-0 flex-nowrap items-center gap-2">
-              <div
-                className="grid shrink-0 grid-cols-3 gap-1 rounded-md bg-surface-muted p-1"
-                role="tablist"
-                aria-label="Prognoz ko'rsatkichi"
-              >
-                {forecastMetrics.map((item) => {
-                  const isActive = item.key === metricKey;
-
-                  return (
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      key={item.key}
-                      onClick={() => setMetricKey(item.key)}
-                      className={`h-8 rounded px-2.5 text-xs font-bold transition-colors ${
-                        isActive
-                          ? "bg-surface text-foreground shadow-sm ring-1 ring-border/80"
-                          : "text-muted hover:text-foreground"
-                      }`}
-                    >
-                      {item.shortLabel}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div
-                className="flex shrink-0 gap-1 rounded-md border border-border bg-surface p-1"
-                role="group"
-                aria-label="Prognoz davri"
-              >
-                {aiPeriods.map((item) => {
-                  const isActive = !customRange && item.key === period;
-
-                  return (
-                    <button
-                      type="button"
-                      aria-pressed={isActive}
-                      key={item.key}
-                      onClick={() => {
-                        setPeriod(item.key);
-                        setCustomRange(null);
-                      }}
-                      className={`h-8 rounded px-2.5 text-xs font-bold transition-colors ${
-                        isActive
-                          ? "bg-primary text-white shadow-sm"
-                          : "text-muted hover:bg-surface-muted hover:text-foreground"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-                <DateRangePicker
-                  value={customRange}
-                  onChange={setCustomRange}
-                  minDate={FORECAST_START_DATE}
-                  maxDate={FORECAST_END_DATE}
-                  presets={forecastDatePresets}
-                  triggerLabel="Boshqa"
-                  dialogLabel="Prognoz oralig'i"
+              <p className="ui-label text-faint">Prognoz</p>
+              <h2 className="mt-1 flex items-center gap-2 text-base font-bold tracking-[-0.02em] text-foreground">
+                {metric.label}
+                <TrendIcon
+                  className={`size-4 ${isPositive ? "text-success" : "text-danger"}`}
+                  aria-hidden="true"
                 />
-              </div>
+              </h2>
             </div>
+            <p className="text-[13px] text-muted">{metric.unit}</p>
           </div>
 
-          <div className="mt-5 h-[19rem] w-full" aria-label={`${metric.label} prognoz grafigi`}>
+          <div className="mt-4 h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={series} margin={{ top: 12, right: 12, left: -10, bottom: 0 }}>
-                <CartesianGrid
-                  vertical={false}
-                  stroke="var(--chart-grid)"
-                  strokeDasharray="3 5"
-                />
+              <ComposedChart data={forecast.points} margin={{ top: 6, right: 6, left: -14, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="forecast-band" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.16} />
+                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "var(--muted)", fontSize: 11, fontWeight: 600 }}
-                  dy={10}
+                  axisLine={false}
+                  tick={{ fontSize: 10, fill: "var(--text-muted)" }}
                   minTickGap={18}
                 />
                 <YAxis
-                  axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "var(--faint)", fontSize: 11, fontWeight: 600 }}
-                  tickFormatter={formatAxisValue}
+                  axisLine={false}
+                  width={52}
+                  tick={{ fontSize: 11, fill: "var(--text-muted)" }}
                   domain={["auto", "auto"]}
-                  width={50}
                 />
                 <Tooltip
-                  cursor={{ stroke: "var(--border-strong)", strokeDasharray: "3 4" }}
-                  content={<ForecastTooltip metric={metric} />}
-                />
-                <ReferenceLine
-                  x={periodData.boundaryLabel}
-                  stroke="var(--border-strong)"
-                  strokeDasharray="4 5"
-                  label={{
-                    value: "Bugun",
-                    position: "insideTopLeft",
-                    fill: "var(--muted)",
-                    fontSize: 11,
-                    fontWeight: 700,
+                  contentStyle={{
+                    borderRadius: 10,
+                    border: "1px solid var(--border)",
+                    fontSize: 12,
                   }}
+                  formatter={(value, name) =>
+                    typeof value === "number"
+                      ? [formatNumber(value, metric.decimals), String(name)]
+                      : [String(value), String(name)]
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="upper"
+                  stroke="none"
+                  fill="url(#forecast-band)"
+                  connectNulls
+                  name="Yuqori chegara"
+                  isAnimationActive={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="lower"
+                  stroke="none"
+                  fill="var(--surface)"
+                  connectNulls
+                  name="Quyi chegara"
+                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
                   dataKey="actual"
-                  name="Haqiqiy"
-                  stroke="var(--primary)"
-                  strokeWidth={2.5}
+                  stroke="var(--chart-1)"
+                  strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, fill: "var(--surface)", strokeWidth: 3 }}
-                  connectNulls
-                  animationDuration={420}
+                  connectNulls={false}
+                  name="Kuzatilgan"
                 />
                 <Line
                   type="monotone"
                   dataKey="predicted"
-                  name="Prognoz"
-                  stroke="var(--accent)"
-                  strokeWidth={2.5}
-                  strokeDasharray="7 5"
+                  stroke="var(--primary)"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
                   dot={false}
-                  activeDot={{ r: 4, fill: "var(--surface)", strokeWidth: 3 }}
                   connectNulls
-                  animationDuration={420}
+                  name="Prognoz"
                 />
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-                <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-                Haqiqiy qiymat
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-                <span className="w-3 border-t-2 border-dashed border-accent" aria-hidden="true" />
-                AI prognozi
-              </span>
-            </div>
-            <span className="text-xs font-medium text-faint" aria-live="polite">
-              Yangilandi: {lastUpdated}
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3 text-xs font-semibold text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-4 rounded bg-chart-1" aria-hidden="true" />
+              Kuzatilgan
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-4 rounded border-t-2 border-dashed border-primary" aria-hidden="true" />
+              Prognoz
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2.5 rounded-sm bg-primary/15" aria-hidden="true" />
+              95% ishonch oralig&apos;i
             </span>
           </div>
         </div>
 
-        <aside className="flex flex-col rounded-lg border border-primary/15 bg-primary-soft p-5 shadow-card">
-          <div className="flex items-start justify-between gap-3">
-            <span className="grid size-10 place-items-center rounded-lg bg-primary text-white shadow-sm">
-              <Sparkles className="size-[18px]" aria-hidden="true" />
-            </span>
-            <span className="rounded-full bg-surface/80 px-2.5 py-1 text-[11px] font-bold text-primary ring-1 ring-inset ring-primary/10">
-              AI izohi
-            </span>
-          </div>
+        <aside className="rounded-lg border border-primary/15 bg-primary-soft p-5 shadow-card">
+          <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+            <Sparkles className="size-4" aria-hidden="true" />
+          </span>
 
-          <h2 className="mt-4 text-base font-bold leading-6 tracking-[-0.02em] text-foreground">
-            {metric.insightTitle}
-          </h2>
-          <p className="mt-2 text-[13px] leading-5 text-muted-strong">{metric.insight}</p>
+          {insight ? (
+            <>
+              <p className="ui-label mt-4 text-primary">AI izohi</p>
+              <h2 className="mt-1.5 text-base font-bold leading-6 tracking-[-0.02em] text-foreground">
+                {insight.insightTitle}
+              </h2>
+              <p className="mt-2 text-[13px] leading-5 text-muted-strong">{insight.insight}</p>
 
-          <div className="mt-5 rounded-lg border border-primary/10 bg-surface/75 p-3.5">
-            <p className="ui-label text-faint">Asosiy omillar</p>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="relative size-28 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={metric.factors}
-                      dataKey="value"
-                      nameKey="label"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={33}
-                      outerRadius={50}
-                      paddingAngle={3}
-                      stroke="none"
-                      animationDuration={420}
-                    >
-                      {metric.factors.map((factor, index) => (
-                        <Cell
-                          fill={CHART_COLORS[index % CHART_COLORS.length]}
-                          key={factor.label}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<FactorTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
-                  <span className="font-mono text-sm font-bold text-foreground">100%</span>
-                  <span className="text-[11px] font-semibold text-faint">ulush</span>
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1 space-y-2.5">
-                {metric.factors.map((factor, index) => (
-                  <div className="flex items-center justify-between gap-2" key={factor.label}>
-                    <span className="inline-flex min-w-0 items-center gap-2 text-[11px] font-semibold text-muted">
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                        aria-hidden="true"
-                      />
-                      <span className="truncate">{factor.label}</span>
-                    </span>
-                    <span className="font-mono text-xs font-bold text-foreground">
-                      {factor.value}%
-                    </span>
+              <div className="mt-4 space-y-2.5 border-t border-primary/10 pt-3">
+                <p className="text-xs font-bold text-muted-strong">Asosiy omillar</p>
+                {insight.factors.map((factor) => (
+                  <div key={factor.label}>
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-muted-strong">{factor.label}</span>
+                      <span className="font-mono font-bold text-foreground">{factor.value}%</span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface/70">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${factor.value}%` }} />
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
 
-          <div className="mt-auto pt-4">
-            <button
-              type="button"
-              onClick={() => setIsRefreshing(true)}
-              disabled={isRefreshing}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-3 text-[13px] font-bold text-white shadow-sm transition-[background-color,transform] hover:bg-primary-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-75"
-            >
-              {isRefreshing ? (
-                <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <RefreshCw className="size-4" aria-hidden="true" />
-              )}
-              {isRefreshing ? "Model hisoblamoqda..." : "Prognozni yangilash"}
-            </button>
-            <Link
-              href="/iqtisodiy-samaradorlik"
-              className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-primary/15 bg-surface/75 px-3 text-[13px] font-bold text-foreground transition-colors hover:bg-surface"
-            >
-              Iqtisodiy ta&apos;sir
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </Link>
-          </div>
+              <p className="mt-4 text-[11px] text-muted">
+                {insight.model}
+                {insight.cached ? " · keshdan" : ""}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="ui-label mt-4 text-primary">AI izohi</p>
+              <p className="mt-2 text-[13px] leading-5 text-muted-strong">
+                {data.insightError ?? "AI izohi hozircha mavjud emas."}
+              </p>
+              <p className="mt-3 text-[11px] leading-4 text-muted">
+                Prognoz raqamlari statistik model bilan hisoblangan va AI&apos;dan
+                mustaqil — izoh bo&apos;lmasa ham natija to&apos;g&apos;ri.
+              </p>
+            </>
+          )}
         </aside>
       </section>
-    </div>
+
+      <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card">
+        <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span>
+          Prognoz {forecast.model === "holt-winters" ? "Holt-Winters (mavsumiy eksponensial silliqlash)" : "Holt chiziqli trend"}{" "}
+          modeli bilan hisoblangan. Ishonch darajasi oxirgi 20% ma&apos;lumotda
+          backtest orqali baholangan (MAPE {formatNumber(forecast.mape, 1)}%).
+          Manba: {data.source.datasetName}.
+        </span>
+      </div>
+    </>
   );
 }
 
-function AnomaliesPanel() {
-  const [filter, setFilter] = useState<SeverityFilter>("all");
-  const [selectedId, setSelectedId] = useState(anomalies[0].id);
+function AnomalyPanel() {
+  const [data, setData] = useState<AnomaliesResponse | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [explainingId, setExplainingId] = useState<string | null>(null);
+  const [explainError, setExplainError] = useState("");
+  const [filter, setFilter] = useState<"all" | AnomalyItem["severity"]>("all");
 
-  const filteredAnomalies = useMemo(
-    () =>
-      filter === "all"
-        ? anomalies
-        : anomalies.filter((anomaly) => anomaly.severity === filter),
-    [filter],
-  );
-  const selectedAnomaly =
-    filteredAnomalies.find((anomaly) => anomaly.id === selectedId) ??
-    filteredAnomalies[0] ??
-    anomalies[0];
-  const selectedStyle = severityStyles[selectedAnomaly.severity];
-  const SelectedIcon = selectedStyle.icon;
-  const chartColor = {
-    critical: "var(--danger)",
-    warning: "var(--warning)",
-    info: "var(--info)",
-  }[selectedAnomaly.severity];
+  const load = useCallback(async (refresh: boolean) => {
+    const response = await getAnomalies(refresh);
 
-  const filters: Array<{ key: SeverityFilter; label: string }> = [
-    { key: "all", label: "Barchasi" },
-    { key: "critical", label: "Kritik" },
-    { key: "warning", label: "Ogohlantirish" },
-    { key: "info", label: "Kuzatuv" },
-  ];
+    setIsLoading(false);
+    setIsRefreshing(false);
+
+    if (!response.ok) {
+      setError(response.message);
+      setData(null);
+      return;
+    }
+
+    setError("");
+    setData(response.data);
+    setSelectedId((current) => current ?? response.data.anomalies[0]?.id ?? null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getAnomalies(false).then((response) => {
+      if (cancelled) return;
+
+      setIsLoading(false);
+
+      if (!response.ok) {
+        setError(response.message);
+        setData(null);
+        return;
+      }
+
+      setError("");
+      setData(response.data);
+      setSelectedId(response.data.anomalies[0]?.id ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleExplain(id: string) {
+    setExplainingId(id);
+    setExplainError("");
+
+    const response = await explainAnomaly(id);
+    setExplainingId(null);
+
+    if (!response.ok) {
+      setExplainError(response.message);
+      return;
+    }
+
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            anomalies: current.anomalies.map((item) =>
+              item.id === id ? { ...item, aiExplanation: response.data.explanation } : item,
+            ),
+          }
+        : current,
+    );
+  }
+
+  if (isLoading && !data) {
+    return (
+      <div className="grid min-h-64 place-content-center text-center">
+        <LoaderCircle className="mx-auto size-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="mt-3 text-xs font-medium text-muted">Anomaliyalar qidirilmoqda...</p>
+      </div>
+    );
+  }
+
+  if (!data) return <EmptyState message={error} />;
+
+  const filtered =
+    filter === "all"
+      ? data.anomalies
+      : data.anomalies.filter((item) => item.severity === filter);
+
+  const selected = data.anomalies.find((item) => item.id === selectedId) ?? filtered[0] ?? null;
+
+  const counts = data.anomalies.reduce<Record<string, number>>((totals, item) => {
+    totals[item.severity] = (totals[item.severity] ?? 0) + 1;
+    return totals;
+  }, {});
 
   return (
-    <div role="tabpanel" aria-label="Anomaliyalar">
-      <section className="mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3" aria-label="Anomaliya ko'rsatkichlari">
-        <SummaryCard
-          label="Aniqlangan holatlar"
-          value="6"
-          detail="so'nggi 30 kun ichida"
-          icon={ScanSearch}
-          tone="primary"
-        />
-        <SummaryCard
-          label="Kritik holat"
-          value="1"
-          detail="tezkor tekshiruv kerak"
-          icon={ShieldAlert}
-          tone="danger"
-        />
-        <SummaryCard
-          label="Ko'rib chiqilgan"
-          value="3"
-          detail="50% holat yopilgan"
-          icon={CheckCircle2}
-          tone="success"
-        />
-        <SummaryCard
-          label="Taxminiy ta'sir"
-          value="8.4 mln"
-          detail="so'm / oy"
-          icon={WalletCards}
-          tone="danger"
-        />
-      </section>
+    <>
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-card sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1 overflow-x-auto rounded-md bg-surface-muted p-1">
+          {(["all", "CRITICAL", "WARNING", "INFO"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              aria-pressed={filter === key}
+              className={`h-8 shrink-0 rounded px-3 text-xs font-bold transition-colors ${
+                filter === key
+                  ? "bg-surface text-foreground shadow-sm ring-1 ring-border/80"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              {key === "all" ? `Barchasi ${data.anomalies.length}` : `${severityStyles[key].label} ${counts[key] ?? 0}`}
+            </button>
+          ))}
+        </div>
 
-      <section className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
-          <div className="border-b border-border p-4">
-            <p className="ui-label text-faint">Aniqlangan hodisalar</p>
-            <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-              Anomaliyalar ro&apos;yxati
-            </h2>
-            <div className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-md bg-surface-muted p-1">
-              {filters.map((item) => {
-                const isActive = filter === item.key;
+        <button
+          type="button"
+          onClick={() => {
+            setIsRefreshing(true);
+            void load(true);
+          }}
+          disabled={isRefreshing}
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-xs font-bold text-foreground shadow-sm transition-colors hover:border-border-strong hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+          Qayta tekshirish
+        </button>
+      </div>
+
+      <section className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[21rem_minmax(0,1fr)]">
+        <div className="max-h-[32rem] overflow-y-auto rounded-lg border border-border bg-surface p-2 shadow-card">
+          {filtered.length === 0 ? (
+            <div className="grid min-h-40 place-content-center text-center">
+              <ScanSearch className="mx-auto size-6 text-faint" aria-hidden="true" />
+              <p className="mt-3 text-xs font-bold text-foreground">Anomaliya topilmadi</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {filtered.map((item) => {
+                const style = severityStyles[item.severity];
+                const isSelected = item.id === selected?.id;
 
                 return (
                   <button
+                    key={item.id}
                     type="button"
-                    key={item.key}
-                    aria-pressed={isActive}
-                    onClick={() => {
-                      setFilter(item.key);
-                      const next =
-                        item.key === "all"
-                          ? anomalies[0]
-                          : anomalies.find((anomaly) => anomaly.severity === item.key);
-                      if (next) setSelectedId(next.id);
-                    }}
-                    className={`h-8 shrink-0 rounded px-2 text-[11px] font-bold transition-colors ${
-                      isActive
-                        ? "bg-surface text-foreground shadow-sm ring-1 ring-border/80"
-                        : "text-muted hover:text-foreground"
+                    onClick={() => setSelectedId(item.id)}
+                    aria-pressed={isSelected}
+                    className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors ${
+                      isSelected
+                        ? "border-primary/30 bg-primary-soft/65"
+                        : "border-transparent hover:bg-canvas"
                     }`}
                   >
-                    {item.label}
+                    <span className={`mt-1.5 size-2 shrink-0 rounded-full ${style.dot}`} aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-xs font-bold text-foreground">
+                          {item.metricLabel}
+                        </span>
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ${style.badge}`}>
+                          {item.deviationPct > 0 ? "+" : ""}
+                          {formatNumber(item.deviationPct, 1)}%
+                        </span>
+                      </span>
+                      <span className="mt-1 flex items-center gap-2 text-[11px] font-medium text-muted">
+                        <span>{formatDate(item.date)}</span>
+                        {item.zScore !== null && (
+                          <span className="font-mono">z={formatNumber(item.zScore, 2)}</span>
+                        )}
+                        {item.aiExplanation && (
+                          <Sparkles className="size-3 text-primary" aria-hidden="true" />
+                        )}
+                      </span>
+                    </span>
                   </button>
                 );
               })}
             </div>
-          </div>
-
-          <div className="divide-y divide-border p-1.5">
-            {filteredAnomalies.map((anomaly) => {
-              const style = severityStyles[anomaly.severity];
-              const Icon = style.icon;
-              const isSelected = anomaly.id === selectedAnomaly.id;
-
-              return (
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(anomaly.id)}
-                  className={`flex w-full gap-3 rounded-lg px-2.5 py-3 text-left transition-colors ${
-                    isSelected ? "bg-primary-soft" : "hover:bg-surface-muted"
-                  }`}
-                  aria-pressed={isSelected}
-                  key={anomaly.id}
-                >
-                  <span className={`grid size-8 shrink-0 place-items-center rounded-md ${style.iconClass}`}>
-                    <Icon className="size-4" strokeWidth={1.9} aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-bold leading-5 text-foreground">
-                      {anomaly.metric}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs font-medium text-muted">
-                      {anomaly.time}
-                    </span>
-                  </span>
-                  <span
-                    className={`mt-0.5 shrink-0 rounded-full px-2 py-1 font-mono text-[11px] font-bold ${style.badgeClass}`}
-                  >
-                    {anomaly.change}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          )}
         </div>
 
-        <div className="min-w-0 space-y-4">
-          <div className="rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        {selected && (
+          <div className="min-w-0 rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="ui-label text-faint">Og&apos;ish dinamikasi</p>
-                <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-                  {selectedAnomaly.metric}
-                </h2>
-                <p className="mt-1 text-[13px] text-muted">Kutilgan diapazon va haqiqiy natija</p>
-              </div>
-              <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${selectedStyle.badgeClass}`}>
-                <span className={`size-1.5 rounded-full ${selectedStyle.dotClass}`} aria-hidden="true" />
-                {selectedStyle.label}
-              </span>
-            </div>
-
-            <div className="mt-4 h-[15.5rem] w-full" aria-label={`${selectedAnomaly.metric} anomaliya grafigi`}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={selectedAnomaly.trend}
-                  margin={{ top: 12, right: 12, left: -10, bottom: 0 }}
-                  barGap={3}
-                >
-                  <CartesianGrid
-                    vertical={false}
-                    stroke="var(--chart-grid)"
-                    strokeDasharray="3 5"
-                  />
-                  <XAxis
-                    dataKey="label"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "var(--muted)", fontSize: 11, fontWeight: 600 }}
-                    dy={10}
-                    minTickGap={16}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "var(--faint)", fontSize: 11, fontWeight: 600 }}
-                    tickFormatter={formatAxisValue}
-                    domain={["auto", "auto"]}
-                    width={52}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "var(--surface-muted)" }}
-                    content={<AnomalyTooltip />}
-                  />
-                  <Bar
-                    dataKey="expected"
-                    name="Kutilgan"
-                    fill="var(--surface-muted)"
-                    stroke="var(--faint)"
-                    strokeWidth={1}
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={20}
-                    animationDuration={380}
-                  />
-                  <Bar
-                    dataKey="actual"
-                    name="Haqiqiy"
-                    fill={chartColor}
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={20}
-                    animationDuration={420}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
                 <span
-                  className="size-2 rounded-full"
-                  style={{ backgroundColor: chartColor }}
-                  aria-hidden="true"
-                />
-                Haqiqiy qiymat
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-                <span className="size-2 rounded-sm border border-faint bg-surface-muted" aria-hidden="true" />
-                Kutilgan qiymat
-              </span>
-            </div>
-          </div>
-
-          <article className="rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
-            <div className="flex items-start gap-3">
-              <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${selectedStyle.iconClass}`}>
-                <SelectedIcon className="size-[18px]" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="ui-label text-faint">Tanlangan hodisa</p>
-                    <h2 className="mt-1 text-base font-bold leading-6 tracking-[-0.02em] text-foreground">
-                      {selectedAnomaly.title}
-                    </h2>
-                  </div>
-                  <span className="shrink-0 text-xs font-medium text-faint">{selectedAnomaly.time}</span>
-                </div>
-                <p className="mt-2 text-[13px] leading-5 text-muted">{selectedAnomaly.description}</p>
-              </div>
-            </div>
-
-            <dl className="mt-4 grid grid-cols-1 overflow-hidden rounded-lg border border-border bg-surface-muted sm:grid-cols-3">
-              {[
-                { label: "Haqiqiy", value: selectedAnomaly.current },
-                { label: "Kutilgan", value: selectedAnomaly.expected },
-                { label: "Taxminiy ta'sir", value: selectedAnomaly.impact },
-              ].map((item, index) => (
-                <div
-                  className={`px-3.5 py-3 ${index > 0 ? "border-t border-border sm:border-l sm:border-t-0" : ""}`}
-                  key={item.label}
+                  className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${severityStyles[selected.severity].badge}`}
                 >
-                  <dt className="text-[11px] font-bold uppercase tracking-[0.07em] text-faint">
+                  {severityStyles[selected.severity].label}
+                </span>
+                <h2 className="mt-2 text-base font-bold tracking-[-0.02em] text-foreground">
+                  {selected.metricLabel}
+                </h2>
+                <p className="mt-1 text-[13px] text-muted">
+                  {formatDate(selected.date)} ·{" "}
+                  {selected.method === "zscore" ? "rolling z-score" : "IQR chegarasi"}
+                </p>
+              </div>
+
+              {!selected.aiExplanation && (
+                <button
+                  type="button"
+                  onClick={() => void handleExplain(selected.id)}
+                  disabled={explainingId === selected.id}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-xs font-bold text-foreground shadow-sm transition-colors hover:border-border-strong hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {explainingId === selected.id ? (
+                    <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <BrainCircuit className="size-3.5" aria-hidden="true" />
+                  )}
+                  AI bilan izohlash
+                </button>
+              )}
+            </div>
+
+            <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { label: "Kuzatilgan", value: formatNumber(selected.observed, selected.decimals) },
+                { label: "Kutilgan", value: formatNumber(selected.expected, selected.decimals) },
+                {
+                  label: "Og'ish",
+                  value: `${selected.deviationPct > 0 ? "+" : ""}${formatNumber(selected.deviationPct, 1)}%`,
+                },
+                { label: "z-score", value: formatNumber(selected.zScore, 2) },
+              ].map((item) => (
+                <div className="rounded-md border border-border bg-canvas p-2.5" key={item.label}>
+                  <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-faint">
                     {item.label}
                   </dt>
-                  <dd className="mt-1.5 font-mono text-xs font-bold text-foreground">{item.value}</dd>
+                  <dd className="mt-1 font-mono text-sm font-bold text-foreground">{item.value}</dd>
                 </div>
               ))}
             </dl>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_17rem]">
-              <div className="rounded-lg border border-primary/10 bg-primary-soft p-3.5">
-                <p className="flex items-center gap-1.5 text-xs font-bold text-primary">
-                  <BrainCircuit className="size-3.5" aria-hidden="true" />
-                  AI tavsiyasi
+            <div className="mt-4 h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={selected.trend} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: "var(--text-muted)" }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    width={48}
+                    tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                    domain={["auto", "auto"]}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 10,
+                      border: "1px solid var(--border)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expected"
+                    stroke="var(--text-muted)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    name="Kutilgan"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="actual"
+                    stroke="var(--danger)"
+                    strokeWidth={2}
+                    dot={{ r: 2.5 }}
+                    name="Kuzatilgan"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            {explainError && (
+              <p className="mt-3 flex items-start gap-2 rounded-md border border-warning/20 bg-warning-soft px-3 py-2 text-[13px] font-medium leading-5 text-warning">
+                <AlertTriangle className="mt-px size-4 shrink-0" aria-hidden="true" />
+                {explainError}
+              </p>
+            )}
+
+            {selected.aiExplanation && (
+              <div className="mt-4 rounded-lg border border-primary/15 bg-primary-soft p-4">
+                <p className="ui-label flex items-center gap-1.5 text-primary">
+                  <Sparkles className="size-3.5" aria-hidden="true" />
+                  AI izohi
                 </p>
                 <p className="mt-2 text-[13px] leading-5 text-muted-strong">
-                  {selectedAnomaly.recommendation}
+                  {selected.aiExplanation.description}
                 </p>
-                <Link
-                  href="/qarorlar"
-                  className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
-                >
-                  Qarorni ko&apos;rib chiqish
-                  <ArrowRight className="size-3.5" aria-hidden="true" />
-                </Link>
-              </div>
 
-              <div className="rounded-lg border border-border p-3.5">
-                <p className="ui-label text-faint">Ehtimoliy sabablar</p>
-                <div className="mt-3 space-y-3">
-                  {selectedAnomaly.causes.map((cause) => (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-bold text-muted-strong">Ehtimoliy sabablar</p>
+                  {selected.aiExplanation.causes.map((cause) => (
                     <div key={cause.label}>
-                      <div className="mb-1.5 flex items-center justify-between gap-3">
-                        <span className="text-xs font-semibold text-muted">{cause.label}</span>
-                        <span className="font-mono text-xs font-bold text-foreground">{cause.value}%</span>
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="text-muted-strong">{cause.label}</span>
+                        <span className="font-mono font-bold text-foreground">{cause.value}%</span>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${cause.value}%` }}
-                        />
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface/70">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${cause.value}%` }} />
                       </div>
                     </div>
                   ))}
                 </div>
+
+                <div className="mt-3 rounded-md border border-primary/10 bg-surface/75 p-3">
+                  <p className="text-xs font-bold text-muted-strong">Tavsiya</p>
+                  <p className="mt-1 text-[13px] leading-5 text-muted-strong">
+                    {selected.aiExplanation.recommendation}
+                  </p>
+                  <p className="mt-2 text-[11px] font-medium text-muted">
+                    Kutilayotgan ta&apos;sir: {selected.aiExplanation.impact}
+                  </p>
+                </div>
               </div>
-            </div>
-          </article>
-        </div>
+            )}
+
+            <Link
+              href="/qarorlar"
+              className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
+            >
+              Qaror tavsiyalariga o&apos;tish
+              <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          </div>
+        )}
       </section>
-    </div>
+
+      <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card">
+        <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span>
+          Aniqlash usuli: {data.detection.method}. Hafta kuni bo&apos;yicha mavsumiy
+          tuzatish qo&apos;llanadi — dam olish kunlaridagi tabiiy pasayish anomaliya
+          deb belgilanmaydi. Kritik chegara z ≥ {data.detection.criticalZ},
+          ogohlantirish z ≥ {data.detection.warningZ}.
+        </span>
+      </div>
+    </>
   );
 }
 
 export function AiAnalyticsView() {
-  const [activeTab, setActiveTab] = useState<AnalysisTab>("forecast");
+  const [tab, setTab] = useState<Tab>("forecast");
 
   return (
     <div className="mx-auto w-full max-w-6xl pb-2">
       <PageHeader
         eyebrow="Sun'iy intellekt"
         title="AI tahlili"
-        description="Ko'rsatkichlarni prognozlang, noodatiy o'zgarishlarni aniqlang va sabablarini tushuning."
-        action={
-          <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[13px] font-bold text-muted-strong shadow-sm">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-30" />
-              <span className="relative inline-flex size-2 rounded-full bg-success" />
-            </span>
-            Model faol
-            <span className="font-mono text-xs text-success">94.7%</span>
-          </div>
-        }
+        description="Prognozlash va anomaliyalarni aniqlash natijalari."
       />
 
-      <div className="mt-5 flex flex-col gap-3 rounded-lg border border-border bg-surface p-1.5 shadow-card sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid grid-cols-2 gap-1" role="tablist" aria-label="AI tahlil turi">
-          {[
-            { key: "forecast" as const, label: "Prognozlash", icon: ChartNoAxesCombined },
-            { key: "anomalies" as const, label: "Anomaliyalar", icon: ScanSearch },
-          ].map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.key;
+      <div className="mt-5 flex gap-1 rounded-lg border border-border bg-surface p-1.5 shadow-card" role="tablist">
+        {(
+          [
+            { key: "forecast", label: "Prognozlash", icon: TrendingUp },
+            { key: "anomalies", label: "Anomaliyalar", icon: ScanSearch },
+          ] as const
+        ).map((item) => {
+          const Icon = item.icon;
 
-            return (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                key={item.key}
-                onClick={() => setActiveTab(item.key)}
-                className={`inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-bold transition-colors ${
-                  isActive
-                    ? "bg-primary text-white shadow-sm"
-                    : "text-muted hover:bg-surface-muted hover:text-foreground"
-                }`}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-2 px-2 pb-1 sm:pb-0">
-          <span className="grid size-7 place-items-center rounded-md bg-surface-muted text-muted">
-            <Database className="size-3.5" aria-hidden="true" />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[11px] font-bold uppercase tracking-[0.07em] text-faint">
-              Dataset
-            </span>
-            <span className="block truncate text-xs font-bold text-foreground">
-              ishlab-chiqarish-avgust.csv
-            </span>
-          </span>
-        </div>
+          return (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.key}
+              onClick={() => setTab(item.key)}
+              className={`inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md text-[13px] font-bold transition-colors ${
+                tab === item.key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted hover:bg-surface-muted hover:text-foreground"
+              }`}
+            >
+              <Icon className="size-3.5" aria-hidden="true" />
+              {item.label}
+            </button>
+          );
+        })}
       </div>
 
-      {activeTab === "forecast" ? <ForecastPanel /> : <AnomaliesPanel />}
-
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card">
-        <BrainCircuit className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        Natijalar demo model asosida hisoblangan. Production rejimida model versiyasi, aniqlik tarixi va audit yozuvlari saqlanadi.
+      <div className="mt-4">
+        {tab === "forecast" ? <ForecastPanel /> : <AnomalyPanel />}
       </div>
     </div>
   );

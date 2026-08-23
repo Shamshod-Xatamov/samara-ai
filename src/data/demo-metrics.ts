@@ -1,0 +1,155 @@
+import type { MetricsResponse } from "@/services/metrics";
+
+/**
+ * Landing sahifasidagi planshet ichida ko'rsatiladigan namoyish ma'lumoti.
+ *
+ * Bu ATAYLAB statik: landing ochiq sahifa, unda haqiqiy korxona raqamlari
+ * ko'rinmasligi kerak. Shu bilan birga bu rasm emas — interfeysning o'zi
+ * ishlaydi, faqat ma'lumoti namunaviy.
+ *
+ * Qiymatlar bazadagi haqiqiy ko'rsatkichlardan ATAYLAB farq qiladi, shunda
+ * namoyish va haqiqiy panel adashtirilmaydi. Bu fayl `prisma` ni ham,
+ * `fetch` ni ham chaqirmaydi — baza o'chiq bo'lsa ham sahifa ochiladi.
+ */
+export const DEMO_DASHBOARD_METRICS: MetricsResponse = {
+  source: {
+    datasetId: "demo",
+    datasetName: "namuna-zavod-2026.xlsx",
+    rowCount: 1860,
+    quality: 99,
+    earliestDate: "2025-09-01",
+    latestDate: "2026-08-19",
+    availableKeys: [
+      "sana",
+      "bolim",
+      "hajm",
+      "daromad",
+      "xarajat",
+      "mehnat_soat",
+      "xato_soni",
+      "qayta_ishlash_vaqti",
+      "avtomatlashtirilgan",
+    ],
+  },
+  period: {
+    key: "month",
+    label: "30 kun",
+    from: "2026-07-21",
+    to: "2026-08-19",
+    rowCount: 120,
+  },
+  baseline: {
+    from: "2025-09-01",
+    to: "2025-10-30",
+    days: 60,
+    rowCount: 240,
+  },
+  kpis: [
+    {
+      key: "efficiency",
+      label: "Samaradorlik indeksi",
+      value: 91.2,
+      unit: "%",
+      decimals: 1,
+      change: null,
+      absoluteChange: 3.4,
+      positiveWhen: "up",
+      comparison: "oldingi davrga nisbatan",
+    },
+    {
+      key: "processing",
+      label: "Qayta ishlash vaqti",
+      value: 1.84,
+      unit: "soniya",
+      decimals: 2,
+      change: -12.4,
+      absoluteChange: null,
+      positiveWhen: "down",
+      comparison: "o'rtacha qiymat",
+    },
+    {
+      key: "accuracy",
+      label: "Ma'lumot aniqligi",
+      value: 99.1,
+      unit: "%",
+      decimals: 1,
+      change: 1.8,
+      absoluteChange: null,
+      positiveWhen: "up",
+      comparison: "xatosiz yozuvlar ulushi",
+    },
+    {
+      key: "automation",
+      label: "Avtomatlashtirish",
+      value: 92.6,
+      unit: "%",
+      decimals: 1,
+      change: 5.2,
+      absoluteChange: null,
+      positiveWhen: "up",
+      comparison: "jarayonlar ulushi",
+    },
+    {
+      key: "cost",
+      label: "Operatsion xarajat",
+      value: 96.4,
+      unit: "mln so'm",
+      decimals: 1,
+      change: -8.6,
+      absoluteChange: null,
+      positiveWhen: "down",
+      comparison: "30 kun davri uchun",
+    },
+    {
+      key: "savedCost",
+      label: "Tejalgan xarajat",
+      value: 31.2,
+      unit: "mln so'm",
+      decimals: 1,
+      change: 15.4,
+      absoluteChange: null,
+      positiveWhen: "up",
+      comparison: "bazaviy davrga nisbatan",
+    },
+    {
+      key: "savedHours",
+      label: "Tejalgan vaqt",
+      value: 412,
+      unit: "soat",
+      decimals: 0,
+      change: null,
+      absoluteChange: 17.1,
+      positiveWhen: "up",
+      comparison: "bazaviy davrga nisbatan",
+    },
+    {
+      key: "roi",
+      label: "Investitsiya qaytimi",
+      value: 88.5,
+      unit: "%",
+      decimals: 1,
+      change: null,
+      absoluteChange: null,
+      positiveWhen: "up",
+      comparison: "yillik ko'rinishda",
+    },
+  ],
+  series: [
+    { label: "20-iyul", bucketStart: "2026-07-20", efficiency: 87.4, cost: 24.9, processing: 2.02, accuracy: 98.6, productivity: 70.1 },
+    { label: "27-iyul", bucketStart: "2026-07-27", efficiency: 89.1, cost: 24.2, processing: 1.95, accuracy: 98.9, productivity: 73.4 },
+    { label: "3-avg", bucketStart: "2026-08-03", efficiency: 90.3, cost: 23.6, processing: 1.90, accuracy: 99.0, productivity: 75.2 },
+    { label: "10-avg", bucketStart: "2026-08-10", efficiency: 90.8, cost: 23.1, processing: 1.87, accuracy: 99.1, productivity: 76.8 },
+    { label: "17-avg", bucketStart: "2026-08-17", efficiency: 91.2, cost: 22.6, processing: 1.84, accuracy: 99.1, productivity: 78.3 },
+  ],
+  ees: {
+    score: 91.2,
+    coverage: 1,
+    components: [
+      { key: "time", label: "Vaqt samaradorligi", raw: 1.84, score: 88.6, weight: 0.2, unit: "soniya" },
+      { key: "cost", label: "Xarajat samaradorligi", raw: 0.004, score: 100, weight: 0.25, unit: "mln so'm" },
+      { key: "labor", label: "Mehnat unumdorligi", raw: 0.312, score: 81, weight: 0.2, unit: "mln so'm / soat" },
+      { key: "automation", label: "Avtomatlashtirish", raw: 92.6, score: 95, weight: 0.15, unit: "%" },
+      { key: "quality", label: "Sifat", raw: 0.991, score: 95.8, weight: 0.2, unit: "ulush" },
+    ],
+  },
+};

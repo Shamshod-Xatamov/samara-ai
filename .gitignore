@@ -20,6 +20,9 @@
 # vercel
 .vercel
 
+# prisma — generatsiya qilinadigan client (pnpm install / build paytida yaratiladi)
+/src/generated
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -22,6 +22,7 @@ import {
   SETTINGS_UPDATED_EVENT,
   type AppSettings,
 } from "@/data/settings";
+import { fetchCurrentUser, logout } from "@/services/auth";
 
 type AppTopbarProps = {
   mobileMenuOpen: boolean;
@@ -29,6 +30,12 @@ type AppTopbarProps = {
 };
 
 type OpenMenu = "notifications" | "account" | null;
+
+const roleLabels: Record<string, string> = {
+  ADMIN: "Administrator",
+  ANALYST: "Analitik",
+  VIEWER: "Kuzatuvchi",
+};
 
 function getInitials(name: string) {
   return (
@@ -72,6 +79,35 @@ export function AppTopbar({
     return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdate);
   }, []);
 
+  // Bazadagi haqiqiy sessiya ma'lumoti lokal sozlamadan ustun turadi.
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchCurrentUser().then((user) => {
+      if (cancelled || !user) return;
+
+      setAccount((current) => ({
+        profile: {
+          ...current.profile,
+          fullName: user.fullName,
+          email: user.email,
+          role: roleLabels[user.role] ?? current.profile.role,
+        },
+        organization: {
+          ...current.organization,
+          name: user.organization.name,
+          sector: user.organization.sector,
+          timezone: user.organization.timezone,
+          currency: user.organization.currency,
+        },
+      }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!openMenu) return;
 
@@ -100,9 +136,10 @@ export function AppTopbar({
     setOpenMenu((current) => (current === menu ? null : menu));
   }
 
-  function handleLogout() {
-    sessionStorage.removeItem("ai-samaradorlik-foydalanuvchi");
+  async function handleLogout() {
+    await logout();
     router.replace("/kirish");
+    router.refresh();
   }
 
   return (

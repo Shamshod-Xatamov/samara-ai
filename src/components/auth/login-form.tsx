@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  AlertCircle,
   ArrowRight,
   Eye,
   EyeOff,
@@ -13,6 +14,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+
+import { DEFAULT_AUTHENTICATED_PATH } from "@/config/routes";
+import { login } from "@/services/auth";
 
 const loginSchema = z.object({
   email: z
@@ -31,9 +35,26 @@ type LoginValues = z.infer<typeof loginSchema>;
 const fieldClassName =
   "h-12 w-full rounded-md border border-border bg-surface pl-11 pr-4 text-sm text-foreground shadow-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-surface-muted";
 
+/**
+ * Proxy kirilmagan foydalanuvchini `?keyin=/sahifa` bilan qaytaradi.
+ * Faqat ilova ichidagi nisbiy yo'lga ruxsat beriladi (ochiq redirect oldini olish).
+ */
+function resolveRedirectTarget() {
+  if (typeof window === "undefined") return DEFAULT_AUTHENTICATED_PATH;
+
+  const target = new URLSearchParams(window.location.search).get("keyin");
+
+  if (!target || !target.startsWith("/") || target.startsWith("//")) {
+    return DEFAULT_AUTHENTICATED_PATH;
+  }
+
+  return target;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const {
     register,
@@ -48,18 +69,35 @@ export function LoginForm() {
   });
 
   async function onSubmit(values: LoginValues) {
-    await new Promise((resolve) => setTimeout(resolve, 650));
+    setFormError("");
 
-    sessionStorage.setItem(
-      "ai-samaradorlik-foydalanuvchi",
-      JSON.stringify({ email: values.email }),
-    );
+    const result = await login(values);
 
-    router.push("/dashboard");
+    if (!result.ok) {
+      setFormError(result.message);
+      return;
+    }
+
+    router.replace(resolveRedirectTarget());
+    // Server componentlar yangi sessiyani ko'rishi uchun.
+    router.refresh();
   }
 
   return (
     <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+      {formError && (
+        <div
+          className="flex items-start gap-2.5 rounded-md border border-danger/20 bg-danger-soft px-3.5 py-3"
+          role="alert"
+        >
+          <AlertCircle
+            className="mt-px size-[18px] shrink-0 text-danger"
+            aria-hidden="true"
+          />
+          <p className="text-sm font-medium leading-5 text-danger">{formError}</p>
+        </div>
+      )}
+
       <div className="space-y-2">
         <label className="block text-sm font-medium text-foreground" htmlFor="email">
           Email manzil
