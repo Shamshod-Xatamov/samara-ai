@@ -5,8 +5,8 @@ Sun'iy intellekt asosida iqtisodiy samaradorlikni real vaqt rejimida kuzatish, t
 ## Ishga tushirish
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Brauzerda [http://localhost:3000](http://localhost:3000) manzilini oching.
@@ -14,10 +14,10 @@ Brauzerda [http://localhost:3000](http://localhost:3000) manzilini oching.
 ## Asosiy buyruqlar
 
 ```bash
-npm run dev
-npm run lint
-npm run build
-npm run start
+pnpm dev
+pnpm lint
+pnpm build
+pnpm start
 ```
 
 Batafsil ishlab chiqish rejasi [PLAN.md](./PLAN.md), yakuniy UI nazorat bandlari esa [UI_CHECKLIST.md](./UI_CHECKLIST.md) faylida saqlanadi.
