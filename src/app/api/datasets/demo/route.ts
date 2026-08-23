@@ -13,6 +13,11 @@ import { serializeDatasetSummary } from "@/lib/datasets/serialize";
 import { ParseError } from "@/lib/parsing/parse-file";
 
 /**
+ * Serverless funksiyaning default chegarasi 10 soniya, bu esa
+ * AI so'rovi yoki katta faylni qayta ishlash uchun yetmaydi.
+ */
+export const maxDuration = 60;
+/**
  * Demo dataset — `pnpm data:generate` yaratgan namuna faylni tizimga yuklaydi.
  * Bu haqiqiy upload oqimining o'zi, faqat fayl tanlash bosqichisiz.
  */

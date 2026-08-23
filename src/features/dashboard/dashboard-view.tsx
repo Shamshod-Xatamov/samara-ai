@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -10,11 +10,12 @@ import {
   BellRing,
   BrainCircuit,
   ChartNoAxesCombined,
-  CheckCircle2,
   Clock3,
+  Database,
   Gauge,
   Info,
   Lightbulb,
+  LoaderCircle,
   PiggyBank,
   Sparkles,
   TimerReset,
@@ -32,94 +33,93 @@ import {
 } from "recharts";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { formatDate, formatNumber } from "@/lib/format";
+import { recentAlerts } from "@/data/dashboard";
 import {
-  chartData,
-  chartMetrics,
-  dashboardMetrics,
-  efficiencyBreakdown,
-  periodLabels,
-  periodOptions,
-  recentAlerts,
-  type ChartMetricKey,
-  type DashboardPoint,
+  getMetrics,
+  type EesComponent,
+  type Kpi,
+  type MetricPoint,
+  type MetricsResponse,
   type PeriodKey,
-} from "@/data/dashboard";
+} from "@/services/metrics";
 
-const metricIcons = {
-  gauge: Gauge,
-  clock: Clock3,
-  brain: BrainCircuit,
-  workflow: Workflow,
-  wallet: WalletCards,
-  "piggy-bank": PiggyBank,
-  timer: TimerReset,
-  chart: ChartNoAxesCombined,
+const periodOptions: Array<{ key: PeriodKey; label: string }> = [
+  { key: "today", label: "Bugun" },
+  { key: "week", label: "7 kun" },
+  { key: "month", label: "30 kun" },
+  { key: "quarter", label: "Chorak" },
+  { key: "year", label: "Yil" },
+];
+
+const periodLabels: Record<PeriodKey, string> = {
+  today: "so'nggi kun",
+  week: "so'nggi 7 kun",
+  month: "so'nggi 30 kun",
+  quarter: "so'nggi chorak",
+  year: "so'nggi 12 oy",
+};
+
+type ChartMetricKey = "efficiency" | "cost" | "processing" | "accuracy" | "productivity";
+
+const chartMetrics: Array<{
+  key: ChartMetricKey;
+  label: string;
+  unit: string;
+  decimals: number;
+}> = [
+  { key: "efficiency", label: "Samaradorlik", unit: "%", decimals: 1 },
+  { key: "cost", label: "Xarajat", unit: " mln so'm", decimals: 1 },
+  { key: "processing", label: "Qayta ishlash", unit: " s", decimals: 2 },
+  { key: "accuracy", label: "Aniqlik", unit: "%", decimals: 1 },
+  { key: "productivity", label: "Unumdorlik", unit: "%", decimals: 1 },
+];
+
+const kpiIcons: Record<string, typeof Gauge> = {
+  efficiency: Gauge,
+  processing: Clock3,
+  accuracy: BrainCircuit,
+  automation: Workflow,
+  cost: WalletCards,
+  savedCost: PiggyBank,
+  savedHours: TimerReset,
+  roi: ChartNoAxesCombined,
+};
+
+const componentBarColors: Record<string, string> = {
+  time: "bg-chart-1",
+  cost: "bg-chart-2",
+  labor: "bg-chart-5",
+  automation: "bg-chart-3",
+  quality: "bg-chart-4",
 };
 
 const alertStyles = {
-  warning: {
-    icon: AlertTriangle,
-    iconClass: "bg-warning-soft text-warning",
-    dotClass: "bg-warning",
-  },
-  danger: {
-    icon: BellRing,
-    iconClass: "bg-danger-soft text-danger",
-    dotClass: "bg-danger",
-  },
-  info: {
-    icon: Info,
-    iconClass: "bg-info-soft text-info",
-    dotClass: "bg-info",
-  },
+  warning: { icon: AlertTriangle, iconClass: "bg-warning-soft text-warning", dotClass: "bg-warning" },
+  danger: { icon: BellRing, iconClass: "bg-danger-soft text-danger", dotClass: "bg-danger" },
+  info: { icon: Info, iconClass: "bg-info-soft text-info", dotClass: "bg-info" },
 };
 
-function formatMetricValue(value: number) {
-  return value.toFixed(2).replace(/\.?0+$/, "");
-}
+function KpiCard({ kpi }: { kpi: Kpi }) {
+  const Icon = kpiIcons[kpi.key] ?? Gauge;
 
-type DashboardTooltipProps = {
-  active?: boolean;
-  payload?: Array<{
-    value?: number | string;
-    payload?: DashboardPoint;
-  }>;
-  label?: string | number;
-  metric: (typeof chartMetrics)[number];
-};
+  const delta = kpi.change ?? kpi.absoluteChange;
+  const hasDelta = delta !== null && Number.isFinite(delta);
+  const isImprovement = hasDelta
+    ? kpi.positiveWhen === "up"
+      ? delta > 0
+      : delta < 0
+    : false;
 
-function DashboardTooltip({
-  active,
-  payload,
-  label,
-  metric,
-}: DashboardTooltipProps) {
-  if (!active || !payload?.length) return null;
-
-  const rawValue = payload[0]?.value;
-  const value = typeof rawValue === "number" ? rawValue : Number(rawValue ?? 0);
-
-  return (
-    <div className="min-w-36 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-floating">
-      <p className="text-[13px] font-semibold text-muted">{label}</p>
-      <p className="mt-1 font-mono text-sm font-bold text-foreground">
-        {formatMetricValue(value)}
-        {metric.unit}
-      </p>
-    </div>
-  );
-}
-
-function MetricCard({ metric }: { metric: (typeof dashboardMetrics)[number] }) {
-  const Icon = metricIcons[metric.icon];
-  const TrendIcon = metric.direction === "up" ? ArrowUpRight : ArrowDownRight;
+  const TrendIcon = hasDelta && delta > 0 ? ArrowUpRight : ArrowDownRight;
+  const deltaText = hasDelta
+    ? `${delta > 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)}${kpi.change !== null ? "%" : ""}`
+    : null;
 
   return (
     <article className="group min-w-0 rounded-lg border border-border bg-surface p-3.5 shadow-card transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md sm:p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-h-8 text-[13px] font-semibold leading-4 text-muted">
-          {metric.label}
-        </p>
+        <p className="min-h-8 text-[13px] font-semibold leading-4 text-muted">{kpi.label}</p>
         <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-muted text-muted-strong ring-1 ring-inset ring-border/80 transition-colors group-hover:bg-primary-soft group-hover:text-primary">
           <Icon className="size-4" strokeWidth={1.8} aria-hidden="true" />
         </span>
@@ -127,32 +127,45 @@ function MetricCard({ metric }: { metric: (typeof dashboardMetrics)[number] }) {
 
       <div className="mt-2.5 flex min-w-0 items-end gap-1.5">
         <p className="truncate font-mono text-xl font-bold leading-none tracking-[-0.045em] text-foreground sm:text-[1.4rem]">
-          {metric.value}
+          {formatNumber(kpi.value, kpi.decimals)}
         </p>
-        {"suffix" in metric && (
-          <p className="mb-0.5 truncate text-xs font-semibold text-muted">
-            {metric.suffix}
-          </p>
-        )}
+        <p className="mb-0.5 truncate text-xs font-semibold text-muted">{kpi.unit}</p>
       </div>
 
       <div className="mt-3 flex min-w-0 items-center gap-1.5 border-t border-border pt-2.5">
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-success-soft px-1.5 py-0.5 font-mono text-[11px] font-bold text-success sm:text-xs">
-          <TrendIcon className="size-3" aria-hidden="true" />
-          {metric.change}
-        </span>
-        <span className="truncate text-[11px] text-faint sm:text-xs">
-          {metric.comparison}
+        {deltaText ? (
+          <span
+            className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[11px] font-bold sm:text-xs ${
+              isImprovement ? "bg-success-soft text-success" : "bg-danger-soft text-danger"
+            }`}
+          >
+            <TrendIcon className="size-3" aria-hidden="true" />
+            {deltaText}
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full bg-surface-muted px-1.5 py-0.5 font-mono text-[11px] font-bold text-faint">
+            —
+          </span>
+        )}
+        <span className="truncate text-[11px] text-faint sm:text-xs" title={kpi.note ?? kpi.comparison}>
+          {kpi.note ?? kpi.comparison}
         </span>
       </div>
     </article>
   );
 }
 
-function EfficiencyScore() {
-  const score = 86.4;
+function EfficiencyScore({
+  score,
+  components,
+  coverage,
+}: {
+  score: number | null;
+  components: EesComponent[];
+  coverage: number;
+}) {
   const circumference = 2 * Math.PI * 52;
-  const offset = circumference - (score / 100) * circumference;
+  const offset = circumference - ((score ?? 0) / 100) * circumference;
 
   return (
     <section className="rounded-lg border border-border bg-surface p-5 shadow-card">
@@ -164,7 +177,7 @@ function EfficiencyScore() {
           </h2>
         </div>
         <span className="rounded-full bg-accent-soft px-2 py-1 text-xs font-bold text-accent">
-          Demo indeks
+          {coverage >= 1 ? "To'liq" : `${Math.round(coverage * 100)}% qamrov`}
         </span>
       </div>
 
@@ -174,16 +187,9 @@ function EfficiencyScore() {
             className="size-full -rotate-90"
             viewBox="0 0 120 120"
             role="img"
-            aria-label={`Samaradorlik indeksi ${score} ball`}
+            aria-label={`Samaradorlik indeksi ${score ?? 0} ball`}
           >
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              fill="none"
-              stroke="var(--surface-muted)"
-              strokeWidth="9"
-            />
+            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface-muted)" strokeWidth="9" />
             <circle
               cx="60"
               cy="60"
@@ -194,11 +200,12 @@ function EfficiencyScore() {
               strokeWidth="9"
               strokeDasharray={circumference}
               strokeDashoffset={offset}
+              className="transition-[stroke-dashoffset] duration-500"
             />
           </svg>
           <div className="absolute inset-0 grid place-content-center text-center">
             <p className="font-mono text-3xl font-bold tracking-[-0.06em] text-foreground">
-              {score}
+              {score === null ? "—" : score.toFixed(1)}
             </p>
             <p className="mt-0.5 text-xs font-bold uppercase tracking-[0.1em] text-faint">
               100 dan
@@ -208,18 +215,18 @@ function EfficiencyScore() {
       </div>
 
       <div className="mt-5 space-y-3.5">
-        {efficiencyBreakdown.map((item) => (
-          <div key={item.label}>
+        {components.map((component) => (
+          <div key={component.key}>
             <div className="mb-1.5 flex items-center justify-between gap-3">
-              <span className="text-[13px] font-medium text-muted">{item.label}</span>
+              <span className="text-[13px] font-medium text-muted">{component.label}</span>
               <span className="font-mono text-[13px] font-bold text-foreground">
-                {item.value}%
+                {component.score === null ? "—" : `${component.score.toFixed(0)}%`}
               </span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
               <div
-                className={`h-full rounded-full ${item.color}`}
-                style={{ width: `${item.value}%` }}
+                className={`h-full rounded-full transition-[width] duration-500 ${componentBarColors[component.key] ?? "bg-chart-1"}`}
+                style={{ width: `${component.score ?? 0}%` }}
               />
             </div>
           </div>
@@ -229,17 +236,115 @@ function EfficiencyScore() {
   );
 }
 
-export function DashboardView() {
-  const [period, setPeriod] = useState<PeriodKey>("week");
-  const [activeMetricKey, setActiveMetricKey] =
-    useState<ChartMetricKey>("efficiency");
+function DashboardTooltip({
+  active,
+  payload,
+  label,
+  metric,
+}: {
+  active?: boolean;
+  payload?: Array<{ value?: number | string; payload?: MetricPoint }>;
+  label?: string | number;
+  metric: (typeof chartMetrics)[number];
+}) {
+  if (!active || !payload?.length) return null;
+
+  const rawValue = payload[0]?.value;
+  const value = typeof rawValue === "number" ? rawValue : Number(rawValue ?? 0);
+
+  return (
+    <div className="min-w-36 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-floating">
+      <p className="text-[13px] font-semibold text-muted">{label}</p>
+      <p className="mt-1 font-mono text-sm font-bold text-foreground">
+        {formatNumber(value, metric.decimals)}
+        {metric.unit}
+      </p>
+    </div>
+  );
+}
+
+export function DashboardView({
+  demoData,
+}: {
+  /**
+   * Landing sahifasidagi ochiq namoyish uchun tayyor ma'lumot.
+   * Berilsa, API'ga so'rov yuborilmaydi — sahifa sessiyasiz ham ishlaydi.
+   */
+  demoData?: MetricsResponse;
+} = {}) {
+  const [period, setPeriod] = useState<PeriodKey>("month");
+  const [activeMetricKey, setActiveMetricKey] = useState<ChartMetricKey>("efficiency");
+  const [data, setData] = useState<MetricsResponse | null>(demoData ?? null);
+  const [isLoading, setIsLoading] = useState(!demoData);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (demoData) return;
+
+    let cancelled = false;
+
+    void getMetrics(period).then((response) => {
+      if (cancelled) return;
+
+      setIsLoading(false);
+
+      if (!response.ok) {
+        setError(response.message);
+        setData(null);
+        return;
+      }
+
+      setError("");
+      setData(response.data);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period, demoData]);
 
   const activeMetric = useMemo(
     () => chartMetrics.find((metric) => metric.key === activeMetricKey)!,
     [activeMetricKey],
   );
-  const currentData = chartData[period];
-  const currentValue = currentData.at(-1)?.[activeMetric.key] ?? 0;
+
+  const series = data?.series ?? [];
+  const currentValue = series.at(-1)?.[activeMetric.key] ?? null;
+
+  if (isLoading && !data) {
+    return (
+      <div className="mx-auto grid min-h-64 w-full max-w-6xl place-content-center text-center">
+        <LoaderCircle className="mx-auto size-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="mt-3 text-xs font-medium text-muted">Ko&apos;rsatkichlar hisoblanmoqda...</p>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="mx-auto w-full max-w-6xl pb-2">
+        <PageHeader
+          eyebrow="Bugungi holat"
+          title="Umumiy ko'rinish"
+          description="Asosiy iqtisodiy va texnologik ko'rsatkichlarni bir joyda kuzating."
+        />
+        <div className="mt-6 grid min-h-56 place-content-center rounded-lg border border-dashed border-border-strong bg-surface p-8 text-center shadow-card">
+          <Database className="mx-auto size-7 text-faint" aria-hidden="true" />
+          <h2 className="mt-4 text-sm font-bold text-foreground">Ko&apos;rsatkichlar hali hisoblanmadi</h2>
+          <p className="mt-1.5 max-w-md text-[13px] leading-5 text-muted">{error}</p>
+          <Link
+            href="/malumotlar"
+            className="mx-auto mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
+          >
+            Ma&apos;lumot manbalariga o&apos;tish
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <div className="mx-auto w-full max-w-6xl pb-2">
@@ -248,22 +353,15 @@ export function DashboardView() {
         title="Umumiy ko'rinish"
         description="Asosiy iqtisodiy va texnologik ko'rsatkichlarni bir joyda kuzating."
         action={
-          <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[13px] font-bold text-muted-strong shadow-sm">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-30" />
-              <span className="relative inline-flex size-2 rounded-full bg-success" />
-            </span>
-            Monitoring faol
+          <div className="inline-flex h-9 max-w-full items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[13px] font-bold text-muted-strong shadow-sm">
+            <Database className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+            <span className="truncate">{data.source.datasetName}</span>
           </div>
         }
       />
 
       <div className="mt-5 flex items-center justify-between gap-3 overflow-x-auto rounded-lg border border-border bg-surface p-1.5 shadow-card">
-        <div
-          className="flex min-w-max items-center gap-1"
-          role="group"
-          aria-label="Ko'rsatkichlar davri"
-        >
+        <div className="flex min-w-max items-center gap-1" role="group" aria-label="Ko'rsatkichlar davri">
           {periodOptions.map((option) => {
             const isActive = period === option.key;
 
@@ -285,16 +383,14 @@ export function DashboardView() {
           })}
         </div>
         <p className="hidden shrink-0 pr-2 text-xs font-medium text-faint md:block">
-          Oxirgi yangilanish: bugun, 20:42
+          {formatDate(data.period.from)} — {formatDate(data.period.to)} · {data.period.rowCount} yozuv
+          {isLoading && " · yangilanmoqda..."}
         </p>
       </div>
 
-      <section
-        className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3"
-        aria-label="Asosiy ko'rsatkichlar"
-      >
-        {dashboardMetrics.map((metric) => (
-          <MetricCard key={metric.label} metric={metric} />
+      <section className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3" aria-label="Asosiy ko'rsatkichlar">
+        {data.kpis.map((kpi) => (
+          <KpiCard key={kpi.key} kpi={kpi} />
         ))}
       </section>
 
@@ -308,7 +404,7 @@ export function DashboardView() {
                   {activeMetric.label}
                 </h2>
                 <span className="font-mono text-sm font-bold text-primary">
-                  {formatMetricValue(currentValue)}
+                  {formatNumber(currentValue, activeMetric.decimals)}
                   {activeMetric.unit}
                 </span>
               </div>
@@ -338,66 +434,45 @@ export function DashboardView() {
                     }`}
                     onClick={() => setActiveMetricKey(metric.key)}
                   >
-                    <span className="hidden 2xl:inline">{metric.label}</span>
-                    <span className="2xl:hidden">{metric.shortLabel}</span>
+                    {metric.label}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div
-            className="mt-5 h-[17.5rem] w-full"
-            role="tabpanel"
-            aria-label={`${activeMetric.label} grafigi`}
-          >
+          <div className="mt-5 h-64 w-full sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={currentData}
-                margin={{ top: 8, right: 4, left: -18, bottom: 0 }}
-              >
+              <AreaChart data={series} margin={{ top: 6, right: 6, left: -14, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="dashboard-area-gradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={activeMetric.color} stopOpacity={0.22} />
-                    <stop offset="100%" stopColor={activeMetric.color} stopOpacity={0} />
+                  <linearGradient id="dashboard-area" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.22} />
+                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid
-                  vertical={false}
-                  stroke="var(--chart-grid)"
-                  strokeDasharray="3 5"
-                />
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="label"
-                  axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "var(--muted)", fontSize: 11, fontWeight: 600 }}
-                  dy={10}
-                  minTickGap={14}
+                  axisLine={false}
+                  tick={{ fontSize: 11, fill: "var(--text-muted)" }}
                 />
                 <YAxis
-                  axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "var(--faint)", fontSize: 11, fontWeight: 600 }}
-                  domain={[activeMetric.minimum, activeMetric.maximum]}
-                  tickFormatter={(value: number) =>
-                    Number.isInteger(value) ? String(value) : value.toFixed(1)
-                  }
+                  axisLine={false}
                   width={48}
+                  tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                  domain={["auto", "auto"]}
                 />
-                <Tooltip
-                  cursor={{ stroke: activeMetric.color, strokeDasharray: "3 4" }}
-                  content={<DashboardTooltip metric={activeMetric} />}
-                />
+                <Tooltip content={<DashboardTooltip metric={activeMetric} />} />
                 <Area
-                  key={`${period}-${activeMetric.key}`}
                   type="monotone"
                   dataKey={activeMetric.key}
-                  stroke={activeMetric.color}
-                  strokeWidth={2.5}
-                  fill="url(#dashboard-area-gradient)"
-                  activeDot={{ r: 4, strokeWidth: 3, fill: "var(--surface)" }}
+                  stroke="var(--primary)"
+                  strokeWidth={2}
+                  fill="url(#dashboard-area)"
                   dot={false}
+                  connectNulls
                   animationDuration={420}
                 />
               </AreaChart>
@@ -407,16 +482,19 @@ export function DashboardView() {
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
               <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-              Amaldagi natija
+              {data.source.datasetName} bo&apos;yicha hisoblangan
             </span>
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-              <span className="h-px w-3 border-t border-dashed border-faint" aria-hidden="true" />
-              Davr bo&apos;yicha o&apos;zgarish
+              Bazaviy davr: {formatDate(data.baseline.from)} — {formatDate(data.baseline.to)}
             </span>
           </div>
         </div>
 
-        <EfficiencyScore />
+        <EfficiencyScore
+          score={data.ees.score}
+          components={data.ees.components}
+          coverage={data.ees.coverage}
+        />
       </section>
 
       <section className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(19rem,0.65fr)]">
@@ -444,17 +522,13 @@ export function DashboardView() {
 
               return (
                 <article className="flex gap-3 py-3 first:pt-0 last:pb-0" key={alert.title}>
-                  <span
-                    className={`grid size-8 shrink-0 place-items-center rounded-md ${style.iconClass}`}
-                  >
+                  <span className={`grid size-8 shrink-0 place-items-center rounded-md ${style.iconClass}`}>
                     <AlertIcon className="size-4" strokeWidth={1.9} aria-hidden="true" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs font-bold text-foreground">{alert.title}</p>
-                      <span className="shrink-0 text-xs font-medium text-faint">
-                        {alert.time}
-                      </span>
+                      <span className="shrink-0 text-xs font-medium text-faint">{alert.time}</span>
                     </div>
                     <p className="mt-1 text-[13px] leading-5 text-muted">{alert.detail}</p>
                   </div>
@@ -507,9 +581,13 @@ export function DashboardView() {
         </aside>
       </section>
 
-      <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card">
-        <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
-        Barcha ko&apos;rsatkichlar demo ma&apos;lumotlari asosida shakllantirilgan. Real manba ulangach ular avtomatik yangilanadi.
+      <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card">
+        <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span>
+          KPI va grafiklar &laquo;{data.source.datasetName}&raquo; datasetining tozalangan{" "}
+          {formatNumber(data.source.rowCount)} ta yozuvidan hisoblangan.
+          Ogohlantirishlar va AI tavsiyalari keyingi bosqichda real ma&apos;lumotga ulanadi.
+        </span>
       </div>
     </div>
   );

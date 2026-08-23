@@ -337,8 +337,11 @@ GET    /api/reports/:id/download
 - [x] [login-form.tsx](src/components/auth/login-form.tsx) real API'ga ulandi + real xato holati
 - [x] [app-topbar.tsx](src/components/layout/app-topbar.tsx) — haqiqiy foydalanuvchi va tashkilot nomi
 - [x] Chiqish tugmasi sessiyani bazadan o'chiradi
-- [ ] `GET`/`PATCH /api/settings` — sozlamalar hali `localStorage` da
-- [ ] [settings-view.tsx](src/features/settings/settings-view.tsx) — sozlamalar API'siga ulash
+- [x] `GET`/`PATCH /api/settings` — profil, tashkilot, chegaralar, bildirishnomalar
+- [x] **Iqtisodiy hisob** bo'limi: AI joriy etish xarajati, bazaviy davr, EES vaznlari
+      (saqlashda yig'indi 1 ga normallashtiriladi)
+- [x] [settings-view.tsx](src/features/settings/settings-view.tsx) — API'ga ulandi,
+      `localStorage` olib tashlandi
 - [ ] Parolni o'zgartirish endpointi
 
 ### 2-bosqich — Ma'lumot pipeline
@@ -387,28 +390,65 @@ GET    /api/reports/:id/download
 
 ### 3-bosqich — Metrika va iqtisod
 
-- [ ] Agregatsiya servisi: tozalangan qatorlardan davr bo'yicha KPI va seriyalar
-- [ ] `metric_snapshots` ga yozish (dashboard tez ochilishi uchun)
-- [ ] EES hisoblagichi (3.2) + sozlanadigan vaznlar
-- [ ] ROI, tejam, unumdorlik (3.3)
-- [ ] Before/after taqqoslash — bazaviy davr real ma'lumotdan
-- [ ] What-if hisoblagichi (3.4) + elastiklik koeffitsientlarini regressiya bilan baholash
-- [ ] [dashboard-view.tsx](src/features/dashboard/dashboard-view.tsx) va [economic-efficiency-view.tsx](src/features/economic-efficiency/economic-efficiency-view.tsx) ulanadi
-- [ ] Ma'lumot yetarli bo'lmagan KPI'lar uchun "ma'lumot yetarli emas" holati
+- [x] Davr bo'linishi (`period.ts`): bugun / 7 kun / 30 kun / chorak / yil
+- [x] Agregatsiya servisi: tozalangan qatorlardan davr bo'yicha KPI va seriyalar
+- [x] Manba tanlash: kanonik sxemaga eng ko'p bog'langan, eng katta dataset
+- [x] EES hisoblagichi (3.2) + sozlanadigan vaznlar; ustuni yo'q komponent
+      hisobdan chiqariladi va `coverage` sifatida ko'rsatiladi
+- [x] ROI, tejam, unumdorlik (3.3); bazaviy davr — ma'lumotning birinchi 60 kuni
+- [x] Before/after taqqoslash — bir xil hajmga keltirilgan (30 kunlik ekvivalent)
+- [x] What-if hisoblagichi (3.4) elastiklik koeffitsientlari bilan
+- [x] `GET /api/metrics`, `GET /api/economics`, `POST /api/economics`
+- [x] [dashboard-view.tsx](src/features/dashboard/dashboard-view.tsx) va [economic-efficiency-view.tsx](src/features/economic-efficiency/economic-efficiency-view.tsx) ulandi
+- [x] Ma'lumot yetarli bo'lmagan KPI'lar uchun "—" va sabab ko'rsatiladi
+- [ ] `metric_snapshots` keshi — hozir har so'rovda hisoblanadi (1400 qatorda tez)
+- [ ] Elastiklik koeffitsientlarini tarixiy ma'lumotdan regressiya bilan baholash
+
+**Tekshirilgan natijalar** (`ishlab-chiqarish-2025-2026.xlsx`, 30 kunlik davr):
+
+| Ko'rsatkich | Bazaviy (sen–okt 2025) | Joriy (iyul–avg 2026) |
+|---|---|---|
+| EES | 42.6 | **84.9** |
+| Qayta ishlash vaqti | 8.42 s | **2.30 s** |
+| Mehnat vaqti | 1 130 soat/oy | **806 soat/oy** |
+| Operatsion xarajat | 143.5 mln/oy | **117.8 mln/oy** |
+| Xatolar darajasi | 4.66% | **1.73%** |
+
+Tejam 25.6 mln so'm/oy, 324 soat/oy, ROI 73.3%.
 
 ### 4-bosqich — AI qatlami
 
-- [ ] `src/lib/ai/gemini.ts` — client, structured output, retry, timeout, xato holati
-- [ ] `ai_cache` qatlami + cache key hash
-- [ ] Holt/regressiya prognoz + MAPE backtest → `forecasts`
-- [ ] z-score / IQR / trend anomaliya detektori → `anomalies`
-- [ ] **Gemini `forecast-insight`**, **`anomaly-explanation`**, **`dashboard-brief`**
-- [ ] **Gemini `decision-generate`** — anomaliyadan to'liq qaror tavsiyasi
-- [ ] Qaror statusi va feedback saqlash
-- [ ] Rate limit + AI xatosida graceful degradation
-- [ ] [ai-analytics-view.tsx](src/features/ai-analytics/ai-analytics-view.tsx) va [decisions-view.tsx](src/features/decisions/decisions-view.tsx) ulanadi
+- [x] `src/lib/ai/gemini.ts` — client, structured output, model zanjiri, timeout, xato holati
+- [x] `ai_cache` qatlami + cache key hash
+- [x] **Holt-Winters** prognoz (haftalik mavsumiylik) + MAPE backtest
+- [x] Mavsumiy tuzatilgan z-score / IQR anomaliya detektori → `anomalies`
+- [x] **Gemini `forecast-insight`** va **`anomaly-explanation`**
+- [x] **Gemini `decision-generate`** — anomaliyadan to'liq qaror tavsiyasi
+- [x] Qaror statusi va feedback saqlash; qaror yopilsa anomaliya ham yopiladi
+- [x] AI xatosida graceful degradation — statistika baribir ko'rsatiladi
+- [x] `GET /api/ai/forecast`, `GET /api/ai/anomalies`,
+      `POST /api/ai/anomalies/:id/explain`, `GET|POST /api/decisions`,
+      `PATCH /api/decisions/:id`
+- [x] [ai-analytics-view.tsx](src/features/ai-analytics/ai-analytics-view.tsx) va [decisions-view.tsx](src/features/decisions/decisions-view.tsx) ulandi
+- [ ] `dashboard-brief` — dashboard uchun AI xulosa
+- [ ] Rate limit (AI endpointlariga)
+
+**Model tanlash va validatsiya:**
+
+| | Holt (mavsumiysiz) | Holt-Winters (mavsum 7 kun) |
+|---|---|---|
+| Xarajat MAPE | 30.7% | **5.1%** |
+| Ishonch | 69.3% | **94.9%** |
+| Ishonch oralig'i | −1.46 … 9.69 (manfiy!) | 2.96 … 6.64 |
+
+Anomaliya detektori generator ataylab qo'ygan xarajat sakrashlarini topdi:
+`2026-06-17` (+26.7%, z=8.17) va `2026-08-14` (+23.1%, z=4.92).
 
 ### 5-bosqich — Real vaqt monitoringi
+
+> **Mijoz qarori bilan scope'dan chiqarildi.** [monitoring-view.tsx](src/features/monitoring/monitoring-view.tsx)
+> sahifasiga ochiq namoyish banneri qo'yildi: oqim brauzerda generatsiya qilinishi
+> va real manba ulanmagani aniq yozilgan.
 
 - [ ] `ingest_keys` — API key generatsiya va sozlamalarda ko'rsatish
 - [ ] `POST /api/ingest` — tashqi tizimdan real yozuv qabul qilish
@@ -419,6 +459,9 @@ GET    /api/reports/:id/download
 - [ ] [monitoring-view.tsx](src/features/monitoring/monitoring-view.tsx) — `setInterval` + `Math.random()` olib tashlanadi
 
 ### 6-bosqich — Hisobotlar
+
+> **Mijoz qarori bilan scope'dan chiqarildi.** [reports-view.tsx](src/features/reports/reports-view.tsx)
+> sahifasiga ochiq namoyish banneri qo'yildi.
 
 - [ ] Hisobot ma'lumotini yig'ish servisi (tur bo'yicha bo'limlar)
 - [ ] **Gemini `report-summary`** — executive summary, xulosalar, risklar, tavsiyalar

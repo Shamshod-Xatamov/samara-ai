@@ -3,7 +3,8 @@
 //
 // 1-bosqich: tashkilot, foydalanuvchi, sessiya va sozlamalar.
 // 2-bosqich: dataset, ustunlar, qatorlar, sifat muammolari va tozalash.
-// Metrika, AI va hisobot jadvallari keyingi bosqichlarda qo'shiladi.
+// 4-bosqich: anomaliyalar va qaror tavsiyalari.
+// Hisobot jadvallari keyingi bosqichda qo'shiladi.
 
 generator client {
   provider = "prisma-client"
@@ -24,9 +25,11 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users    User[]
-  settings OrgSettings?
-  datasets Dataset[]
+  users     User[]
+  settings  OrgSettings?
+  datasets  Dataset[]
+  anomalies Anomaly[]
+  decisions Decision[]
 
   @@map("organizations")
 }
@@ -53,9 +56,10 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  sessions Session[]
-  datasets Dataset[]
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sessions  Session[]
+  datasets  Dataset[]
+  decisions Decision[]
 
   @@index([orgId])
   @@map("users")
@@ -310,4 +314,106 @@ model CleaningRun {
 
   @@index([datasetId])
   @@map("cleaning_runs")
+}
+
+
+// ---------------------------------------------------------------------------
+// AI tahlili va qarorlar
+// ---------------------------------------------------------------------------
+
+enum AnomalySeverity {
+  CRITICAL
+  WARNING
+  INFO
+
+  @@map("anomaly_severity")
+}
+
+enum AnomalyStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+
+  @@map("anomaly_status")
+}
+
+/// Statistik usul bilan aniqlangan anomaliya.
+/// Aniqlash deterministik (z-score / IQR); Gemini faqat sababni izohlaydi.
+model Anomaly {
+  id         String          @id @default(uuid()) @db.Uuid
+  orgId      String          @map("org_id") @db.Uuid
+  datasetId  String?         @map("dataset_id") @db.Uuid
+  /// Qaysi metrika bo'yicha: "xarajat", "qayta_ishlash_vaqti", ...
+  metricKey  String          @map("metric_key")
+  /// Anomaliya qayd etilgan sana
+  detectedAt DateTime        @map("detected_at")
+  severity   AnomalySeverity
+  /// Aniqlash usuli: "zscore" yoki "iqr"
+  method     String
+  observed   Float
+  expected   Float
+  deviationPct Float         @map("deviation_pct")
+  zScore     Float?          @map("z_score")
+  status     AnomalyStatus   @default(OPEN)
+  /// Atrofdagi nuqtalar — UI'dagi grafik uchun
+  trend      Json
+  /// Qo'shimcha kontekst: davr o'rtachasi, kesim va h.k.
+  context    Json?
+  /// Gemini izohi: sabablar, tavsiya, ta'sir
+  aiExplanation Json?        @map("ai_explanation")
+  /// Takroriy yozuvni oldini olish uchun: metrika + sana + dataset
+  fingerprint String         @unique
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  decisions Decision[]
+
+  @@index([orgId, detectedAt])
+  @@index([status])
+  @@map("anomalies")
+}
+
+enum DecisionPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+
+  @@map("decision_priority")
+}
+
+enum DecisionStatus {
+  NEW
+  REVIEWED
+  PLANNED
+
+  @@map("decision_status")
+}
+
+/// Qaror tavsiyasi — Gemini anomaliya statistikasidan generatsiya qiladi.
+/// `payload` src/data/decisions.ts dagi `DecisionRecommendation` tipiga mos.
+model Decision {
+  id         String           @id @default(uuid()) @db.Uuid
+  orgId      String           @map("org_id") @db.Uuid
+  anomalyId  String?          @map("anomaly_id") @db.Uuid
+  code       String
+  title      String
+  summary    String
+  priority   DecisionPriority
+  status     DecisionStatus   @default(NEW)
+  confidence Int
+  payload    Json
+  feedback   String?
+  reviewedAt DateTime?        @map("reviewed_at")
+  reviewedById String?        @map("reviewed_by_id") @db.Uuid
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  anomaly    Anomaly?     @relation(fields: [anomalyId], references: [id], onDelete: SetNull)
+  reviewedBy User?        @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([orgId, code])
+  @@index([orgId, createdAt])
+  @@map("decisions")
 }

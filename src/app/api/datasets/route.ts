@@ -12,6 +12,12 @@ import { serializeDatasetSummary } from "@/lib/datasets/serialize";
 import { prisma } from "@/lib/db";
 import { ParseError } from "@/lib/parsing/parse-file";
 
+/**
+ * Serverless funksiyaning default chegarasi 10 soniya, bu esa
+ * AI so'rovi yoki katta faylni qayta ishlash uchun yetmaydi.
+ */
+export const maxDuration = 60;
+
 export const GET = withApiErrorHandling(async () => {
   const guard = await requireUser();
   if (!guard.ok) return guard.response;

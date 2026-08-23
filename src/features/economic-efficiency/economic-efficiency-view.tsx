@@ -6,28 +6,23 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeDollarSign,
-  BarChart3,
   Calculator,
-  CheckCircle2,
   Clock3,
+  Database,
   Gauge,
   Info,
+  LoaderCircle,
   RotateCcw,
-  Sparkles,
   Target,
-  TimerReset,
   TrendingUp,
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -35,338 +30,82 @@ import {
 } from "recharts";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { formatDate, formatNumber } from "@/lib/format";
 import {
-  comparisonMetrics,
-  economicKpis,
-  efficiencyComponents,
-  scenarioPresets,
+  getEconomics,
+  runWhatIf,
   type ComparisonMetric,
-} from "@/data/economic-efficiency";
+  type EconomicsResponse,
+  type PeriodKey,
+  type WhatIfResponse,
+} from "@/services/metrics";
 
-const kpiIcons = {
-  chart: BarChart3,
-  wallet: WalletCards,
-  clock: TimerReset,
-  trend: TrendingUp,
+const periodOptions: Array<{ key: PeriodKey; label: string }> = [
+  { key: "week", label: "7 kun" },
+  { key: "month", label: "30 kun" },
+  { key: "quarter", label: "Chorak" },
+  { key: "year", label: "Yil" },
+];
+
+const componentColors: Record<string, string> = {
+  time: "var(--chart-1)",
+  cost: "var(--chart-2)",
+  labor: "var(--chart-5)",
+  automation: "var(--chart-3)",
+  quality: "var(--chart-4)",
 };
 
-const kpiToneClasses = {
-  primary: "bg-primary-soft text-primary",
-  success: "bg-success-soft text-success",
-  accent: "bg-accent-soft text-accent",
-};
+function changeOf(metric: ComparisonMetric) {
+  if (metric.before === null || metric.after === null || metric.before === 0) {
+    return null;
+  }
 
-function ComparisonTooltip({
-  active,
-  payload,
+  return ((metric.after - metric.before) / Math.abs(metric.before)) * 100;
+}
+
+function KpiCard({
   label,
+  value,
+  unit,
+  detail,
+  icon: Icon,
+  tone,
+  note,
 }: {
-  active?: boolean;
-  payload?: Array<{
-    dataKey?: string | number;
-    value?: number | string;
-    payload?: ComparisonMetric;
-  }>;
-  label?: string | number;
+  label: string;
+  value: string;
+  unit?: string;
+  detail: string;
+  icon: LucideIcon;
+  tone: "primary" | "success" | "accent";
+  note?: string;
 }) {
-  const metric = payload?.[0]?.payload;
-  if (!active || !metric) return null;
+  const toneClass = {
+    primary: "bg-primary-soft text-primary",
+    success: "bg-success-soft text-success",
+    accent: "bg-accent-soft text-accent",
+  }[tone];
 
   return (
-    <div className="min-w-48 rounded-lg border border-border bg-surface px-3 py-2.5 shadow-floating">
-      <p className="text-xs font-bold text-foreground">{label}</p>
-      <div className="mt-2 space-y-1.5">
-        <div className="flex items-center justify-between gap-4">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted">
-            <span className="size-2 rounded-sm border border-faint bg-surface-muted" aria-hidden="true" />
-            AI&apos;dan oldin
-          </span>
-          <span className="font-mono text-xs font-bold text-foreground">
-            {metric.beforeLabel}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-4">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted">
-            <span className="size-2 rounded-sm bg-primary" aria-hidden="true" />
-            AI&apos;dan keyin
-          </span>
-          <span className="font-mono text-xs font-bold text-primary">
-            {metric.afterLabel}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EconomicKpiCard({
-  metric,
-}: {
-  metric: (typeof economicKpis)[number];
-}) {
-  const Icon = kpiIcons[metric.icon];
-  const TrendIcon = metric.key === "productivity" || metric.key === "roi"
-    ? ArrowUpRight
-    : ArrowDownRight;
-
-  return (
-    <article className="group flex h-full flex-col rounded-lg border border-border bg-surface p-4 shadow-card transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[13px] font-semibold leading-5 text-muted">{metric.label}</p>
-        <span
-          className={`grid size-9 shrink-0 place-items-center rounded-md ${kpiToneClasses[metric.tone]}`}
-        >
-          <Icon className="size-[18px]" strokeWidth={1.9} aria-hidden="true" />
+    <article className="min-w-0 rounded-lg border border-border bg-surface p-3.5 shadow-card sm:p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-h-8 text-[13px] font-semibold leading-4 text-muted">{label}</p>
+        <span className={`grid size-8 shrink-0 place-items-center rounded-md ${toneClass}`}>
+          <Icon className="size-4" strokeWidth={1.8} aria-hidden="true" />
         </span>
       </div>
 
-      <div className="mt-4 flex min-w-0 items-end gap-2">
-        <p className="font-mono text-2xl font-bold leading-none tracking-[-0.05em] text-foreground">
-          {metric.value}
+      <div className="mt-2.5 flex min-w-0 items-end gap-1.5">
+        <p className="truncate font-mono text-xl font-bold leading-none tracking-[-0.045em] text-foreground sm:text-[1.4rem]">
+          {value}
         </p>
-        {"suffix" in metric && (
-          <span className="mb-0.5 truncate text-xs font-semibold text-muted">
-            {metric.suffix}
-          </span>
-        )}
+        {unit && <p className="mb-0.5 truncate text-xs font-semibold text-muted">{unit}</p>}
       </div>
 
-      <div className="mt-auto flex items-center gap-1.5 border-t border-border pt-3">
-        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-success-soft px-2 py-1 font-mono text-[11px] font-bold text-success">
-          <TrendIcon className="size-3" aria-hidden="true" />
-          {metric.change}
-        </span>
-        <span className="truncate text-xs font-medium text-faint">{metric.detail}</span>
-      </div>
+      <p className="mt-3 border-t border-border pt-2.5 text-[11px] leading-4 text-faint sm:text-xs">
+        {note ?? detail}
+      </p>
     </article>
-  );
-}
-
-function EfficiencyScoreCard() {
-  const score = 86.4;
-  const scoreData = [{ name: "EES", value: score, fill: "var(--primary)" }];
-
-  return (
-    <section className="rounded-lg border border-border bg-surface p-5 shadow-card">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="ui-label text-faint">Umumiy iqtisodiy baho</p>
-          <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-            EES indeksi
-          </h2>
-        </div>
-        <span className="rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-bold text-success">
-          Yuqori
-        </span>
-      </div>
-
-      <div className="mt-3 flex justify-center">
-        <div className="relative size-44">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadialBarChart
-              data={scoreData}
-              cx="50%"
-              cy="50%"
-              innerRadius="76%"
-              outerRadius="100%"
-              startAngle={90}
-              endAngle={-270}
-            >
-              <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-              <RadialBar
-                dataKey="value"
-                background={{ fill: "var(--surface-muted)" }}
-                cornerRadius={10}
-                animationDuration={500}
-              />
-            </RadialBarChart>
-          </ResponsiveContainer>
-          <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
-            <p className="font-mono text-3xl font-bold tracking-[-0.06em] text-foreground">
-              {score}
-            </p>
-            <p className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.09em] text-faint">
-              100 dan
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-surface-muted">
-        <div className="px-3 py-2.5">
-          <p className="text-[11px] font-semibold text-faint">Oldingi davr</p>
-          <p className="mt-1 font-mono text-xs font-bold text-foreground">83.2 ball</p>
-        </div>
-        <div className="border-l border-border px-3 py-2.5">
-          <p className="text-[11px] font-semibold text-faint">O&apos;zgarish</p>
-          <p className="mt-1 font-mono text-xs font-bold text-success">+3.2 ball</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function EfficiencyComponentsStrip() {
-  return (
-    <section className="mt-4 rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="ui-label text-faint">Indeks tarkibi</p>
-          <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-            Samaradorlik komponentlari
-          </h2>
-        </div>
-        <span className="text-xs font-medium text-muted">
-          Indikativ qiymatlar · Avgust 2026
-        </span>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5">
-        {efficiencyComponents.map((component) => (
-          <article className="rounded-lg border border-border bg-canvas p-3" key={component.label}>
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-semibold leading-5 text-muted">{component.label}</p>
-              <span className="shrink-0 font-mono text-sm font-bold text-foreground">
-                {component.value}%
-              </span>
-            </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-muted">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${component.value}%`,
-                  backgroundColor: component.color,
-                }}
-              />
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function BeforeAfterSection() {
-  return (
-    <section className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
-      <div className="min-w-0 rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="ui-label text-faint">Bazaviy taqqoslash</p>
-            <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-              AI&apos;dan oldin va keyin
-            </h2>
-            <p className="mt-1 text-[13px] text-muted">
-              Bazaviy holat 100 indeks sifatida normallashtirilgan
-            </p>
-          </div>
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-bold text-primary">
-            <BadgeDollarSign className="size-3.5" aria-hidden="true" />
-            Oylik baholash
-          </span>
-        </div>
-
-        <div className="mt-5 h-[19rem] w-full" aria-label="AI dan oldin va keyin taqqoslash grafigi">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={comparisonMetrics}
-              layout="vertical"
-              margin={{ top: 4, right: 16, left: 10, bottom: 0 }}
-              barGap={3}
-            >
-              <CartesianGrid
-                horizontal={false}
-                stroke="var(--chart-grid)"
-                strokeDasharray="3 5"
-              />
-              <XAxis
-                type="number"
-                domain={[0, 130]}
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "var(--faint)", fontSize: 11, fontWeight: 600 }}
-                tickFormatter={(value: number) => `${value}%`}
-              />
-              <YAxis
-                type="category"
-                dataKey="shortLabel"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "var(--muted)", fontSize: 11, fontWeight: 600 }}
-                width={96}
-              />
-              <Tooltip
-                cursor={{ fill: "var(--surface-muted)" }}
-                content={<ComparisonTooltip />}
-              />
-              <Bar
-                dataKey="beforeIndex"
-                name="AI'dan oldin"
-                fill="var(--surface-muted)"
-                stroke="var(--border-strong)"
-                strokeWidth={1}
-                radius={[0, 5, 5, 0]}
-                maxBarSize={15}
-                animationDuration={380}
-              />
-              <Bar
-                dataKey="afterIndex"
-                name="AI'dan keyin"
-                fill="var(--primary)"
-                radius={[0, 5, 5, 0]}
-                maxBarSize={15}
-                animationDuration={450}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-              <span className="size-2 rounded-sm border border-faint bg-surface-muted" aria-hidden="true" />
-              AI&apos;dan oldin
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-              <span className="size-2 rounded-sm bg-primary" aria-hidden="true" />
-              AI&apos;dan keyin
-            </span>
-          </div>
-          <span className="text-xs font-medium text-faint">100 = bazaviy holat</span>
-        </div>
-      </div>
-
-      <aside className="rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
-        <p className="ui-label text-faint">Natijalar</p>
-        <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-          Asosiy o&apos;zgarishlar
-        </h2>
-
-        <div className="mt-4 divide-y divide-border">
-          {comparisonMetrics.map((metric) => {
-            const TrendIcon = metric.positiveDirection === "up" ? ArrowUpRight : ArrowDownRight;
-
-            return (
-              <div className="py-3 first:pt-0 last:pb-0" key={metric.key}>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold text-muted">{metric.label}</span>
-                  <span className="inline-flex items-center gap-0.5 rounded-full bg-success-soft px-2 py-1 font-mono text-[11px] font-bold text-success">
-                    <TrendIcon className="size-3" aria-hidden="true" />
-                    {metric.change}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center gap-2 font-mono text-[11px]">
-                  <span className="text-faint line-through">{metric.beforeLabel}</span>
-                  <ArrowRight className="size-3 text-faint" aria-hidden="true" />
-                  <span className="font-bold text-foreground">{metric.afterLabel}</span>
-                </div>
-                <p className="mt-1 text-[11px] font-medium text-muted">{metric.changeLabel}</p>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
-    </section>
   );
 }
 
@@ -376,282 +115,533 @@ function ScenarioSlider({
   baseline,
   min,
   max,
-  step = 1,
   onChange,
   icon: Icon,
 }: {
   label: string;
   value: number;
-  baseline: number;
+  baseline: number | null;
   min: number;
   max: number;
-  step?: number;
   onChange: (value: number) => void;
   icon: LucideIcon;
 }) {
-  const fill = ((value - min) / (max - min)) * 100;
-
   return (
-    <div className="rounded-lg border border-border bg-canvas p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary-soft text-primary">
-            <Icon className="size-4" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-[13px] font-bold text-foreground">{label}</p>
-            <p className="mt-0.5 text-[11px] font-medium text-muted">
-              Bazaviy: {baseline}%
-            </p>
-          </div>
-        </div>
-        <span className="rounded-md bg-surface px-2.5 py-1.5 font-mono text-sm font-bold text-primary shadow-sm ring-1 ring-inset ring-border">
-          {value}%
+    <div className="rounded-lg border border-border bg-canvas p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-foreground">
+          <Icon className="size-3.5 text-primary" aria-hidden="true" />
+          {label}
         </span>
+        <span className="font-mono text-sm font-bold text-primary">{value.toFixed(1)}%</span>
       </div>
 
       <input
         type="range"
         min={min}
         max={max}
-        step={step}
+        step={0.5}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
+        className="mt-3 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-muted accent-primary"
         aria-label={label}
-        className="ui-range mt-5 w-full cursor-pointer"
-        style={{ "--range-fill": `${fill}%` } as CSSProperties}
       />
-      <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] font-medium text-faint">
+
+      <div className="mt-1.5 flex justify-between text-[11px] font-medium text-faint">
         <span>{min}%</span>
+        {baseline !== null && <span>joriy: {baseline.toFixed(1)}%</span>}
         <span>{max}%</span>
       </div>
     </div>
   );
 }
 
-function WhatIfSection() {
-  const [automation, setAutomation] = useState(80);
-  const [accuracy, setAccuracy] = useState(95);
+function ComparisonRow({ metric }: { metric: ComparisonMetric }) {
+  const change = changeOf(metric);
+  const isImprovement =
+    change === null
+      ? false
+      : metric.positiveDirection === "up"
+        ? change > 0
+        : change < 0;
 
-  const result = useMemo(() => {
-    const automationDelta = Math.max(0, automation - 60);
-    const accuracyDelta = Math.max(0, accuracy - 88);
-
-    return {
-      laborSaving: Math.round(automationDelta * 11),
-      costReduction: automationDelta * 0.42,
-      productivityGrowth: automationDelta * 0.585,
-      errorCostReduction: accuracyDelta * 4.6,
-    };
-  }, [accuracy, automation]);
-
-  const activePreset = scenarioPresets.find(
-    (preset) => preset.automation === automation && preset.accuracy === accuracy,
-  )?.key;
+  const TrendIcon = change !== null && change > 0 ? ArrowUpRight : ArrowDownRight;
 
   return (
-    <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface shadow-card">
-      <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
-        <div>
-          <p className="ui-label text-primary">What-if tahlili</p>
-          <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-            Ssenariy parametrlarini o&apos;zgartiring
-          </h2>
-          <p className="mt-1 text-[13px] leading-5 text-muted">
-            Avtomatlashtirish va AI aniqligi iqtisodiy natijalarga qanday ta&apos;sir qilishini baholang.
-          </p>
-        </div>
-        <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-bold text-warning">
-          <Calculator className="size-3.5" aria-hidden="true" />
-          Demo hisob
+    <div className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-border py-3 last:border-b-0">
+      <div className="min-w-0">
+        <p className="text-[13px] font-bold text-foreground">{metric.label}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 font-mono text-xs">
+          <span className="text-faint line-through">
+            {formatNumber(metric.before, metric.decimals)}
+          </span>
+          <ArrowRight className="size-3 text-muted" aria-hidden="true" />
+          <span className="font-bold text-foreground">
+            {formatNumber(metric.after, metric.decimals)}
+          </span>
+          <span className="text-muted">{metric.unit}</span>
+        </p>
+      </div>
+
+      {change !== null && (
+        <span
+          className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-1 font-mono text-[11px] font-bold ${
+            isImprovement ? "bg-success-soft text-success" : "bg-danger-soft text-danger"
+          }`}
+        >
+          <TrendIcon className="size-3" aria-hidden="true" />
+          {change > 0 ? "+" : "−"}
+          {Math.abs(change).toFixed(1)}%
         </span>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-[0.8fr_1.2fr]">
-        <div>
-          <div className="flex items-center justify-between gap-3">
-            <p className="ui-label text-faint">Tayyor ssenariylar</p>
-            <button
-              type="button"
-              onClick={() => {
-                setAutomation(60);
-                setAccuracy(88);
-              }}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-muted transition-colors hover:text-foreground"
-            >
-              <RotateCcw className="size-3.5" aria-hidden="true" />
-              Bazaviy holat
-            </button>
-          </div>
-
-          <div className="mt-3 grid grid-cols-3 gap-1 rounded-md bg-surface-muted p-1">
-            {scenarioPresets.map((preset) => {
-              const isActive = activePreset === preset.key;
-
-              return (
-                <button
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => {
-                    setAutomation(preset.automation);
-                    setAccuracy(preset.accuracy);
-                  }}
-                  className={`h-9 rounded px-2 text-xs font-bold transition-colors ${
-                    isActive
-                      ? "bg-surface text-foreground shadow-sm ring-1 ring-border/80"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                  key={preset.key}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-3 space-y-3">
-            <ScenarioSlider
-              label="Avtomatlashtirish darajasi"
-              value={automation}
-              baseline={60}
-              min={60}
-              max={95}
-              onChange={setAutomation}
-              icon={Gauge}
-            />
-            <ScenarioSlider
-              label="AI aniqligi"
-              value={accuracy}
-              baseline={88}
-              min={88}
-              max={99}
-              step={0.5}
-              onChange={setAccuracy}
-              icon={Target}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-primary/15 bg-primary-soft p-4 sm:p-5" aria-live="polite">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="ui-label text-primary">Kutilayotgan natija</p>
-              <h3 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
-                Ssenariyning iqtisodiy ta&apos;siri
-              </h3>
-            </div>
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-white shadow-sm">
-              <Sparkles className="size-4" aria-hidden="true" />
-            </span>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2.5">
-            {[
-              {
-                label: "Mehnat vaqti tejalishi",
-                value: result.laborSaving > 0 ? `+${result.laborSaving}` : "0",
-                suffix: "soat / oy",
-                icon: Clock3,
-              },
-              {
-                label: "Xarajat kamayishi",
-                value:
-                  result.costReduction > 0
-                    ? `−${result.costReduction.toFixed(1)}%`
-                    : "0.0%",
-                suffix: "kutilayotgan",
-                icon: WalletCards,
-              },
-              {
-                label: "Unumdorlik o'sishi",
-                value:
-                  result.productivityGrowth > 0
-                    ? `+${result.productivityGrowth.toFixed(1)}%`
-                    : "0.0%",
-                suffix: "bazaviy holatdan",
-                icon: TrendingUp,
-              },
-              {
-                label: "Xatolar qiymati",
-                value:
-                  result.errorCostReduction > 0
-                    ? `−${result.errorCostReduction.toFixed(1)}%`
-                    : "0.0%",
-                suffix: "taxminiy kamayish",
-                icon: CheckCircle2,
-              },
-            ].map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <article className="rounded-lg border border-primary/10 bg-surface/80 p-3.5" key={item.label}>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold leading-5 text-muted">{item.label}</p>
-                    <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                  </div>
-                  <p className="mt-3 font-mono text-xl font-bold tracking-[-0.045em] text-foreground">
-                    {item.value}
-                  </p>
-                  <p className="mt-1 text-[11px] font-medium text-muted">{item.suffix}</p>
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="mt-3 rounded-lg border border-primary/10 bg-surface/75 p-3.5">
-            <p className="flex items-center gap-1.5 text-xs font-bold text-primary">
-              <Info className="size-3.5" aria-hidden="true" />
-              Ssenariy izohi
-            </p>
-            <p className="mt-1.5 text-[13px] leading-5 text-muted-strong">
-              Avtomatlashtirish {automation}% va AI aniqligi {accuracy}% bo&apos;lganda qo&apos;lda bajariladigan ishlar kamayib, jarayon barqarorligi oshishi kutiladi.
-            </p>
-          </div>
-
-          <Link
-            href="/qarorlar"
-            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-3 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
-          >
-            Ssenariyni qarorga aylantirish
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
-        </div>
-      </div>
-    </section>
+      )}
+    </div>
   );
 }
 
 export function EconomicEfficiencyView() {
+  const [period, setPeriod] = useState<PeriodKey>("month");
+  const [data, setData] = useState<EconomicsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [automation, setAutomation] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [scenario, setScenario] = useState<WhatIfResponse | null>(null);
+  const [isScenarioLoading, setIsScenarioLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getEconomics(period).then((response) => {
+      if (cancelled) return;
+
+      setIsLoading(false);
+
+      if (!response.ok) {
+        setError(response.message);
+        setData(null);
+        return;
+      }
+
+      setError("");
+      setData(response.data);
+      setAutomation(response.data.scenarioDefaults.automation);
+      setAccuracy(response.data.scenarioDefaults.accuracy);
+      setScenario(null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period]);
+
+  // Slider to'xtaganda hisoblanadi — har bir piksel uchun so'rov yuborilmaydi.
+  useEffect(() => {
+    if (automation === null || accuracy === null) return;
+
+    const timer = window.setTimeout(() => {
+      setIsScenarioLoading(true);
+
+      void runWhatIf({ automation, accuracy, period }).then((response) => {
+        setIsScenarioLoading(false);
+        if (response.ok) setScenario(response.data);
+      });
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [automation, accuracy, period]);
+
+  if (isLoading && !data) {
+    return (
+      <div className="mx-auto grid min-h-64 w-full max-w-6xl place-content-center text-center">
+        <LoaderCircle className="mx-auto size-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="mt-3 text-xs font-medium text-muted">Iqtisodiy ko&apos;rsatkichlar hisoblanmoqda...</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="mx-auto w-full max-w-6xl pb-2">
+        <PageHeader
+          eyebrow="Iqtisodiy natija"
+          title="Iqtisodiy samaradorlik"
+          description="AI joriy etilishining moliyaviy va mehnat natijalarini baholang."
+        />
+        <div className="mt-6 grid min-h-56 place-content-center rounded-lg border border-dashed border-border-strong bg-surface p-8 text-center shadow-card">
+          <Database className="mx-auto size-7 text-faint" aria-hidden="true" />
+          <h2 className="mt-4 text-sm font-bold text-foreground">Hisoblash uchun ma&apos;lumot yo&apos;q</h2>
+          <p className="mt-1.5 max-w-md text-[13px] leading-5 text-muted">{error}</p>
+          <Link
+            href="/malumotlar"
+            className="mx-auto mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
+          >
+            Ma&apos;lumot manbalariga o&apos;tish
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const { savings, ees, comparison } = data;
+
+  const chartData = comparison
+    .filter((metric) => metric.before !== null && metric.after !== null)
+    .map((metric) => ({
+      label: metric.label,
+      // Bazaviy davr 100 ball deb olinadi — birliklari har xil ko'rsatkichlarni
+      // bitta grafikda solishtirish uchun.
+      oldin: 100,
+      keyin: metric.before ? ((metric.after ?? 0) / metric.before) * 100 : 0,
+    }));
+
   return (
     <div className="mx-auto w-full max-w-6xl pb-2">
       <PageHeader
-        eyebrow="Iqtisodiy baholash"
+        eyebrow="Iqtisodiy natija"
         title="Iqtisodiy samaradorlik"
-        description="AI natijalarining xarajat, vaqt va unumdorlikka ta'sirini o'lchang va ssenariylarni baholang."
+        description="AI joriy etilishining moliyaviy va mehnat natijalarini baholang."
         action={
-          <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-warning/20 bg-warning-soft px-3 text-[13px] font-bold text-warning shadow-sm">
-            <Calculator className="size-4" aria-hidden="true" />
-            Demo formula
+          <div className="inline-flex h-9 max-w-full items-center gap-2 rounded-lg border border-border bg-surface px-3 text-[13px] font-bold text-muted-strong shadow-sm">
+            <Database className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+            <span className="truncate">{data.source.datasetName}</span>
           </div>
         }
       />
 
-      <section className="mt-5 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
-        <EfficiencyScoreCard />
-        <div className="grid grid-cols-2 gap-3">
-          {economicKpis.map((metric) => (
-            <EconomicKpiCard metric={metric} key={metric.key} />
+      <div className="mt-5 flex items-center justify-between gap-3 overflow-x-auto rounded-lg border border-border bg-surface p-1.5 shadow-card">
+        <div className="flex min-w-max items-center gap-1" role="group" aria-label="Hisob davri">
+          {periodOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={`h-8 rounded-md px-3 text-[13px] font-bold transition-colors ${
+                period === option.key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted hover:bg-surface-muted hover:text-foreground"
+              }`}
+              onClick={() => setPeriod(option.key)}
+              aria-pressed={period === option.key}
+            >
+              {option.label}
+            </button>
           ))}
+        </div>
+        <p className="hidden shrink-0 pr-2 text-xs font-medium text-faint md:block">
+          {formatDate(data.period.from)} — {formatDate(data.period.to)}
+        </p>
+      </div>
+
+      <section className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3" aria-label="Iqtisodiy ko'rsatkichlar">
+        <KpiCard
+          label="Investitsiya qaytimi"
+          value={savings.roi === null ? "—" : `${formatNumber(savings.roi)}%`}
+          detail="yillik ko'rinishda"
+          icon={TrendingUp}
+          tone="primary"
+          note={
+            savings.investment === null
+              ? "Sozlamalarda joriy etish xarajatini kiriting"
+              : `${formatNumber(savings.investment, 0)} mln so'm investitsiyaga nisbatan`
+          }
+        />
+        <KpiCard
+          label="Tejalgan xarajat"
+          value={formatNumber(savings.savedCost)}
+          unit="mln so'm"
+          detail="bazaviy davrga nisbatan"
+          icon={WalletCards}
+          tone="success"
+          note={`yillik: ${formatNumber(savings.annualisedSaving, 0)} mln so'm`}
+        />
+        <KpiCard
+          label="Tejalgan mehnat vaqti"
+          value={formatNumber(savings.savedHours, 0)}
+          unit="soat"
+          detail="bazaviy davrga nisbatan"
+          icon={Clock3}
+          tone="success"
+        />
+        <KpiCard
+          label="Unumdorlik o'sishi"
+          value={
+            savings.productivityGain === null
+              ? "—"
+              : `${savings.productivityGain > 0 ? "+" : ""}${formatNumber(savings.productivityGain)}%`
+          }
+          detail="daromad / mehnat soati"
+          icon={BadgeDollarSign}
+          tone="accent"
+        />
+      </section>
+
+      <section className="mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+        <div className="rounded-lg border border-border bg-surface p-5 shadow-card">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="ui-label text-faint">EES</p>
+              <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
+                Samaradorlik indeksi
+              </h2>
+            </div>
+            <span className="rounded-full bg-accent-soft px-2 py-1 text-xs font-bold text-accent">
+              {ees.coverage >= 1 ? "To'liq" : `${Math.round(ees.coverage * 100)}%`}
+            </span>
+          </div>
+
+          <div className="mt-4 flex items-baseline justify-center gap-3">
+            <div className="text-center">
+              <p className="font-mono text-4xl font-bold tracking-[-0.06em] text-foreground">
+                {ees.score === null ? "—" : ees.score.toFixed(1)}
+              </p>
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.1em] text-faint">
+                joriy davr
+              </p>
+            </div>
+            <ArrowRight className="size-4 rotate-180 text-muted" aria-hidden="true" />
+            <div className="text-center">
+              <p className="font-mono text-2xl font-bold tracking-[-0.05em] text-faint">
+                {ees.baselineScore === null ? "—" : ees.baselineScore.toFixed(1)}
+              </p>
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.1em] text-faint">
+                bazaviy
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3.5 border-t border-border pt-4">
+            {ees.components.map((component) => (
+              <div key={component.key}>
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <span className="text-[13px] font-medium text-muted">
+                    {component.label}
+                    <span className="ml-1.5 font-mono text-[11px] text-faint">
+                      ×{component.weight}
+                    </span>
+                  </span>
+                  <span className="font-mono text-[13px] font-bold text-foreground">
+                    {component.score === null ? "—" : `${component.score.toFixed(0)}%`}
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-500"
+                    style={{
+                      width: `${component.score ?? 0}%`,
+                      backgroundColor: componentColors[component.key] ?? "var(--chart-1)",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="ui-label text-faint">Taqqoslash</p>
+              <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
+                AI&apos;dan oldin va keyin
+              </h2>
+              <p className="mt-1 text-[13px] leading-5 text-muted">
+                Bazaviy davr: {formatDate(data.baseline.from)} — {formatDate(data.baseline.to)}
+                {" · "}
+                {data.baseline.rowCount} yozuv
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 h-56 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 10, fill: "var(--text-muted)" }}
+                  interval={0}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                  tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                  unit="%"
+                />
+                <Tooltip
+                  cursor={{ fill: "var(--surface-muted)" }}
+                  contentStyle={{
+                    borderRadius: 10,
+                    border: "1px solid var(--border)",
+                    fontSize: 12,
+                  }}
+                  formatter={(value) =>
+                    typeof value === "number" ? `${value.toFixed(1)}%` : String(value)
+                  }
+                />
+                <Bar dataKey="oldin" fill="var(--surface-muted)" radius={[4, 4, 0, 0]} name="Oldin" />
+                <Bar dataKey="keyin" fill="var(--primary)" radius={[4, 4, 0, 0]} name="Keyin" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <p className="mt-2 text-[11px] text-faint">
+            Bazaviy davr 100% deb olingan — turli o&apos;lchov birligidagi ko&apos;rsatkichlarni
+            bitta shkalada solishtirish uchun.
+          </p>
+
+          <div className="mt-3 border-t border-border pt-1">
+            {comparison.map((metric) => (
+              <ComparisonRow key={metric.key} metric={metric} />
+            ))}
+          </div>
         </div>
       </section>
 
-      <EfficiencyComponentsStrip />
-      <BeforeAfterSection />
-      <WhatIfSection />
+      <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface shadow-card">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+          <div>
+            <p className="ui-label text-primary">What-if tahlili</p>
+            <h2 className="mt-1 text-base font-bold tracking-[-0.02em] text-foreground">
+              Ssenariy parametrlarini o&apos;zgartiring
+            </h2>
+            <p className="mt-1 text-[13px] leading-5 text-muted">
+              Avtomatlashtirish va aniqlik iqtisodiy natijalarga qanday ta&apos;sir qilishini baholang.
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-bold text-warning">
+            <Calculator className="size-3.5" aria-hidden="true" />
+            Baholangan
+          </span>
+        </div>
 
-      <div className="mt-4 flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-soft/65 px-4 py-3 text-xs leading-5 text-muted-strong shadow-card">
-        <Info className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-        EES va ssenariy natijalari namoyish uchun shakllantirilgan. Yakuniy indeks formulasi dissertatsiyada metodologik tasdiqlangandan keyin aynan shu modulga ulanadi.
+        <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="ui-label text-faint">Parametrlar</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setAutomation(data.scenarioDefaults.automation);
+                  setAccuracy(data.scenarioDefaults.accuracy);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-muted transition-colors hover:text-foreground"
+              >
+                <RotateCcw className="size-3.5" aria-hidden="true" />
+                Joriy holat
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-3">
+              <ScenarioSlider
+                label="Avtomatlashtirish darajasi"
+                value={automation ?? 0}
+                baseline={data.scenarioDefaults.automation}
+                min={40}
+                max={100}
+                onChange={setAutomation}
+                icon={Gauge}
+              />
+              <ScenarioSlider
+                label="Ma'lumot aniqligi"
+                value={accuracy ?? 0}
+                baseline={data.scenarioDefaults.accuracy}
+                min={90}
+                max={100}
+                onChange={setAccuracy}
+                icon={Target}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-canvas p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="ui-label text-faint">Kutilayotgan natija</p>
+              {isScenarioLoading && (
+                <LoaderCircle className="size-3.5 animate-spin text-primary" aria-hidden="true" />
+              )}
+            </div>
+
+            {scenario ? (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {[
+                  {
+                    label: "Samaradorlik indeksi",
+                    before: scenario.current.ees,
+                    after: scenario.projected.ees,
+                    decimals: 1,
+                    unit: "",
+                  },
+                  {
+                    label: "Qayta ishlash vaqti",
+                    before: scenario.current.inputs.processingSeconds,
+                    after: scenario.projected.inputs.processingSeconds,
+                    decimals: 2,
+                    unit: " s",
+                  },
+                  {
+                    label: "Tejalgan xarajat",
+                    before: scenario.current.savings.savedCost,
+                    after: scenario.projected.savings.savedCost,
+                    decimals: 1,
+                    unit: " mln",
+                  },
+                  {
+                    label: "Investitsiya qaytimi",
+                    before: scenario.current.savings.roi,
+                    after: scenario.projected.savings.roi,
+                    decimals: 1,
+                    unit: "%",
+                  },
+                ].map((item) => (
+                  <div className="rounded-md border border-border bg-surface p-3" key={item.label}>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-faint">
+                      {item.label}
+                    </p>
+                    <div className="mt-2 flex items-baseline gap-1.5">
+                      <span className="font-mono text-[11px] font-bold text-faint line-through">
+                        {formatNumber(item.before, item.decimals)}
+                      </span>
+                      <ArrowRight className="size-3 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="font-mono text-sm font-bold text-foreground">
+                        {formatNumber(item.after, item.decimals)}
+                        {item.unit}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 grid min-h-32 place-content-center text-center">
+                <LoaderCircle className="mx-auto size-5 animate-spin text-primary" aria-hidden="true" />
+                <p className="mt-2 text-xs text-muted">Ssenariy hisoblanmoqda...</p>
+              </div>
+            )}
+
+            {scenario && (
+              <p className="mt-3 border-t border-border pt-3 text-[11px] leading-4 text-faint">
+                {scenario.estimateNote}
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card">
+        <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <span>
+          EES = 100 × Σ(vazn × normallashtirilgan komponent). Vaznlar va chegaralar
+          tashkilot sozlamalarida saqlanadi.
+          {savings.investment !== null && (
+            <>
+              {" "}ROI hisobida {formatNumber(savings.investment, 0)} mln so&apos;m joriy etish
+              xarajati ishlatilgan — bu taxminiy qiymat, sozlamalardan o&apos;zgartiriladi.
+            </>
+          )}
+        </span>
       </div>
     </div>
   );

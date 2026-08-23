@@ -37,6 +37,7 @@ import {
 } from "recharts";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { DemoNotice } from "@/components/ui/demo-notice";
 import {
   economicSignals,
   initialStreamData,
@@ -721,6 +722,11 @@ export function MonitoringView() {
             </button>
           </div>
         }
+      />
+
+      <DemoNotice
+        title="Bu sahifa namoyish rejimida ishlaydi"
+        description="Oqim ko'rsatkichlari brauzerda generatsiya qilinadi va bazaga yozilmaydi. Real vaqt manbasi (ERP, IoT yoki ingest API) ulanmagan. Platformaning qolgan sahifalari — dashboard, ma'lumotlar, AI tahlili, iqtisodiy samaradorlik va qarorlar — yuklangan ma'lumotdan haqiqiy hisoblangan raqamlarni ko'rsatadi."
       />
 
       <SystemStatus

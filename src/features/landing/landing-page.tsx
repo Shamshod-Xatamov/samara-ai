@@ -102,15 +102,33 @@ function ProductPreview() {
           aria-hidden="true"
         />
 
-        <div className="relative aspect-[4/3] overflow-hidden rounded-[1.15rem] bg-background ring-1 ring-white/10 sm:rounded-[1.4rem]">
+        {/*
+          Namoyish qat'iy faqat-ko'rish rejimida:
+            inert      — klaviatura fokusi ham, sichqoncha ham ichkariga kirmaydi
+            sandbox    — havolalar bo'yicha o'tish, forma yuborish, popup va
+                         yuklab olish bloklanadi (skript faqat chizish uchun)
+            overlay    — qolgan barcha hodisalarni ushlab qoladi
+          Sahifaning o'zi ham haqiqiy ma'lumotga tegmaydi: barcha raqamlar
+          statik namunadan, API'lar esa sessiyasiz 401 qaytaradi.
+        */}
+        <div
+          className="relative aspect-[4/3] overflow-hidden rounded-[1.15rem] bg-background ring-1 ring-white/10 sm:rounded-[1.4rem]"
+          inert
+        >
           <iframe
-            src="/dashboard?preview=landing"
+            src="/namoyish"
             title="Samara AI boshqaruv panelining faqat ko'rish uchun namoyishi"
             tabIndex={-1}
             scrolling="no"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin"
             className="pointer-events-none absolute left-0 top-0 h-[416.667%] w-[416.667%] origin-top-left scale-[0.24] border-0 sm:h-[238.095%] sm:w-[238.095%] sm:scale-[0.42]"
           />
-          <span className="absolute inset-0 z-10" aria-hidden="true" />
+          <span
+            className="absolute inset-0 z-10 cursor-default"
+            aria-hidden="true"
+          />
         </div>
       </div>
 

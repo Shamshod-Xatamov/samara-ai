@@ -13,6 +13,11 @@ import { serializeColumn } from "@/lib/datasets/serialize";
 import { prisma } from "@/lib/db";
 import { CANONICAL_KEYS } from "@/lib/parsing/canonical";
 
+/**
+ * Serverless funksiyaning default chegarasi 10 soniya, bu esa
+ * AI so'rovi yoki katta faylni qayta ishlash uchun yetmaydi.
+ */
+export const maxDuration = 60;
 /** Foydalanuvchi AI taklifini tuzatgan holat. */
 const overrideSchema = z.object({
   mappings: z

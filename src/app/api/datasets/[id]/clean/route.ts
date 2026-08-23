@@ -11,6 +11,11 @@ import { prisma } from "@/lib/db";
 import type { RawCell } from "@/lib/parsing/values";
 import { cleanTable } from "@/lib/quality/clean";
 
+/**
+ * Serverless funksiyaning default chegarasi 10 soniya, bu esa
+ * AI so'rovi yoki katta faylni qayta ishlash uchun yetmaydi.
+ */
+export const maxDuration = 60;
 /** Bitta so'rovda yangilanadigan qatorlar soni. */
 const UPDATE_CHUNK = 500;
 

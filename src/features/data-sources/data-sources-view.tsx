@@ -25,6 +25,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { formatNumber, formatRelativeDateTime } from "@/lib/format";
 import { CANONICAL_COLUMNS, type CanonicalKey } from "@/lib/parsing/canonical";
 import {
   cleanDataset,
@@ -73,32 +74,6 @@ const MAPPED_BY_LABELS: Record<
   USER: "Qo'lda",
   HEURISTIC: "Avto",
 };
-
-function formatNumber(value: number) {
-  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-}
-
-function formatUploadedAt(iso: string) {
-  const date = new Date(iso);
-  const now = new Date();
-  const time = date.toLocaleTimeString("uz-UZ", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  const isSameDay = date.toDateString() === now.toDateString();
-  if (isSameDay) return `Bugun, ${time}`;
-
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Kecha, ${time}`;
-
-  return date.toLocaleDateString("uz-UZ", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function DatasetIcon({ format }: { format: DatasetSummary["format"] }) {
   if (format === "XLSX") {
@@ -636,7 +611,7 @@ export function DataSourcesView() {
                           <span>{formatNumber(dataset.rows)} qator</span>
                           <span>{dataset.columns} ustun</span>
                           <span>{dataset.sizeLabel}</span>
-                          <span>{formatUploadedAt(dataset.createdAt)}</span>
+                          <span>{formatRelativeDateTime(dataset.createdAt)}</span>
                           <span className="rounded bg-surface-muted px-1.5 py-0.5 font-bold text-muted-strong">
                             {STATUS_LABELS[dataset.status]}
                           </span>
@@ -869,7 +844,7 @@ export function DataSourcesView() {
                 { label: "Qatorlar", value: formatNumber(selected.rows), icon: Rows3 },
                 { label: "Ustunlar", value: String(selected.columns), icon: Columns3 },
                 { label: "Hajmi", value: selected.sizeLabel, icon: HardDrive },
-                { label: "Yuklangan", value: formatUploadedAt(selected.createdAt), icon: CheckCircle2 },
+                { label: "Yuklangan", value: formatRelativeDateTime(selected.createdAt), icon: CheckCircle2 },
               ].map((item, index) => {
                 const Icon = item.icon;
 

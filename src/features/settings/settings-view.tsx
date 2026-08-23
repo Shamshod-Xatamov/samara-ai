@@ -7,7 +7,6 @@ import {
   ChevronRight,
   CircleUserRound,
   Gauge,
-  Languages,
   LoaderCircle,
   LockKeyhole,
   LogOut,
@@ -22,19 +21,26 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
-import {
-  defaultSettings,
-  readStoredSettings,
-  SETTINGS_STORAGE_KEY,
-  SETTINGS_UPDATED_EVENT,
-  type AppSettings,
-} from "@/data/settings";
+import { defaultSettings, SETTINGS_UPDATED_EVENT } from "@/data/settings";
 import { logout } from "@/services/auth";
+import {
+  getSettings,
+  saveSettings,
+  type SettingsPayload,
+} from "@/services/settings";
 
-type SettingsTab = "profile" | "organization" | "thresholds" | "notifications";
+/** Sozlamalar to'liq shakli — profil, tashkilot, chegaralar va iqtisod. */
+type AppSettings = SettingsPayload;
+
+type SettingsTab =
+  | "profile"
+  | "organization"
+  | "economics"
+  | "thresholds"
+  | "notifications";
 
 const settingsTabs: Array<{
   key: SettingsTab;
@@ -53,6 +59,12 @@ const settingsTabs: Array<{
     label: "Tashkilot",
     description: "Ish muhiti parametrlari",
     icon: Building2,
+  },
+  {
+    key: "economics",
+    label: "Iqtisodiy hisob",
+    description: "ROI va EES parametrlari",
+    icon: Gauge,
   },
   {
     key: "thresholds",
@@ -203,13 +215,12 @@ function ProfileSettings({
             onChange={(fullName) => onChange({ ...settings.profile, fullName })}
           />
           <FormField
-            label="Email manzil"
-            type="email"
-            value={settings.profile.email}
-            onChange={(email) => onChange({ ...settings.profile, email })}
+            label="Platforma tili"
+            value={settings.profile.language}
+            onChange={(language) => onChange({ ...settings.profile, language })}
           />
+          <ReadOnlyField label="Email manzil" value={settings.profile.email} icon={Mail} />
           <ReadOnlyField label="Foydalanuvchi roli" value={settings.profile.role} icon={ShieldCheck} />
-          <ReadOnlyField label="Platforma tili" value={settings.profile.language} icon={Languages} />
         </div>
 
         <div className="mt-5 flex items-start gap-2.5 rounded-lg border border-info/15 bg-info-soft px-3.5 py-3 text-xs leading-5 text-info">
@@ -555,54 +566,260 @@ function NotificationSettings({
   );
 }
 
+
+const EES_WEIGHT_KEYS = [
+  "time",
+  "cost",
+  "labor",
+  "automation",
+  "quality",
+] as const;
+
+function EconomicsSettings({
+  settings,
+  onChange,
+}: {
+  settings: AppSettings;
+  onChange: (economics: AppSettings["economics"]) => void;
+}) {
+  const { economics } = settings;
+  const weightTotal = EES_WEIGHT_KEYS.reduce(
+    (total, key) => total + (economics.eesWeights[key] ?? 0),
+    0,
+  );
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
+      <SectionHeader
+        eyebrow="Iqtisodiy hisob"
+        title="ROI va EES parametrlari"
+        description="Investitsiya qaytimi va samaradorlik indeksi shu qiymatlar asosida hisoblanadi."
+        icon={Gauge}
+      />
+
+      <div className="p-4 sm:p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-bold text-muted-strong">
+              AI joriy etish xarajati
+            </span>
+            <span className="ml-2 text-[11px] font-medium text-faint">mln so&apos;m</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={economics.aiInvestmentCost ?? ""}
+              placeholder="Masalan: 180"
+              onChange={(event) =>
+                onChange({
+                  ...economics,
+                  aiInvestmentCost:
+                    event.target.value === "" ? null : Number(event.target.value),
+                })
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-border bg-surface px-3 text-[13px] font-medium text-foreground shadow-sm outline-none transition-colors placeholder:text-faint hover:border-border-strong focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+            <span className="mt-1.5 block text-[11px] leading-4 text-faint">
+              ROI = (yillik tejam − shu qiymat) / shu qiymat × 100
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-bold text-muted-strong">Bazaviy davr</span>
+            <span className="ml-2 text-[11px] font-medium text-faint">kun</span>
+            <input
+              type="number"
+              min={7}
+              max={365}
+              step={1}
+              value={economics.baselineDays}
+              onChange={(event) =>
+                onChange({ ...economics, baselineDays: Number(event.target.value) })
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-border bg-surface px-3 text-[13px] font-medium text-foreground shadow-sm outline-none transition-colors hover:border-border-strong focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+            <span className="mt-1.5 block text-[11px] leading-4 text-faint">
+              Ma&apos;lumotning birinchi shuncha kuni &laquo;AI&apos;gacha&raquo; davr deb olinadi
+            </span>
+          </label>
+        </div>
+
+        <div className="mt-6 border-t border-border pt-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold text-muted-strong">
+                Samaradorlik indeksi vaznlari
+              </p>
+              <p className="mt-1 text-[11px] leading-4 text-faint">
+                EES = 100 × Σ(vazn × normallashtirilgan komponent)
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-2 py-1 font-mono text-[11px] font-bold ${
+                Math.abs(weightTotal - 1) < 0.01
+                  ? "bg-success-soft text-success"
+                  : "bg-warning-soft text-warning"
+              }`}
+            >
+              yig&apos;indi {weightTotal.toFixed(2)}
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {EES_WEIGHT_KEYS.map((key) => {
+              const value = economics.eesWeights[key] ?? 0;
+
+              return (
+                <div className="rounded-lg border border-border bg-canvas p-3" key={key}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[13px] font-bold text-foreground">
+                      {economics.eesLabels[key] ?? key}
+                    </span>
+                    <span className="font-mono text-sm font-bold text-primary">
+                      {value.toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={0.6}
+                    step={0.01}
+                    value={value}
+                    onChange={(event) =>
+                      onChange({
+                        ...economics,
+                        eesWeights: {
+                          ...economics.eesWeights,
+                          [key]: Number(event.target.value),
+                        },
+                      })
+                    }
+                    className="mt-2.5 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-muted accent-primary"
+                    aria-label={`${economics.eesLabels[key] ?? key} vazni`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="mt-4 flex items-start gap-2.5 rounded-lg border border-info/15 bg-info-soft px-3.5 py-3 text-xs leading-5 text-info">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            Saqlashda vaznlar yig&apos;indisi avtomatik 1 ga keltiriladi, nisbatlar
+            saqlanadi. O&apos;zgarish barcha davrlar uchun darhol qo&apos;llanadi.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsView() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
-  const [draft, setDraft] = useState<AppSettings>(defaultSettings);
-  const [saved, setSaved] = useState<AppSettings>(defaultSettings);
+  const [draft, setDraft] = useState<AppSettings | null>(null);
+  const [saved, setSaved] = useState<AppSettings | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const saveTimerRef = useRef<number | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const hydrationFrame = window.requestAnimationFrame(() => {
-      const stored = readStoredSettings();
-      setDraft(stored);
-      setSaved(stored);
+    let cancelled = false;
+
+    void getSettings().then((response) => {
+      if (cancelled) return;
+
+      setIsLoading(false);
+
+      if (!response.ok) {
+        setError(response.message);
+        return;
+      }
+
+      setDraft(response.data);
+      setSaved(response.data);
     });
 
     return () => {
-      window.cancelAnimationFrame(hydrationFrame);
-      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      cancelled = true;
     };
   }, []);
 
-  const isDirty = JSON.stringify(draft) !== JSON.stringify(saved);
-  const initials = getInitials(draft.profile.fullName);
+  const isDirty =
+    draft !== null && saved !== null && JSON.stringify(draft) !== JSON.stringify(saved);
+  const initials = getInitials(draft?.profile.fullName ?? "");
 
   function markChanged(next: AppSettings) {
     setDraft(next);
     setSaveMessage("");
   }
 
-  function handleSave() {
-    if (!isDirty || isSaving) return;
+  async function handleSave() {
+    if (!draft || !isDirty || isSaving) return;
+
     setIsSaving(true);
     setSaveMessage("");
+    setError("");
 
-    saveTimerRef.current = window.setTimeout(() => {
-      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(draft));
-      setSaved(draft);
-      setIsSaving(false);
-      setSaveMessage("Barcha o'zgarishlar saqlandi");
-      window.dispatchEvent(new CustomEvent(SETTINGS_UPDATED_EVENT, { detail: draft }));
-    }, 620);
+    const response = await saveSettings({
+      profile: {
+        fullName: draft.profile.fullName,
+        language: draft.profile.language,
+      },
+      organization: draft.organization,
+      thresholds: draft.thresholds,
+      notifications: draft.notifications,
+      economics: {
+        aiInvestmentCost: draft.economics.aiInvestmentCost,
+        baselineDays: draft.economics.baselineDays,
+        eesWeights: draft.economics.eesWeights,
+      },
+    });
+
+    setIsSaving(false);
+
+    if (!response.ok) {
+      setError(response.message);
+      return;
+    }
+
+    // Server vaznlarni normallashtirib qaytaradi — javobni manba deb olamiz.
+    setDraft(response.data);
+    setSaved(response.data);
+    setSaveMessage("Barcha o'zgarishlar saqlandi");
+    window.dispatchEvent(
+      new CustomEvent(SETTINGS_UPDATED_EVENT, { detail: response.data }),
+    );
   }
 
   async function handleLogout() {
     await logout();
     router.replace("/kirish");
     router.refresh();
+  }
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto grid min-h-64 w-full max-w-6xl place-content-center text-center">
+        <LoaderCircle className="mx-auto size-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="mt-3 text-xs font-medium text-muted">Sozlamalar yuklanmoqda...</p>
+      </div>
+    );
+  }
+
+  if (!draft) {
+    return (
+      <div className="mx-auto w-full max-w-6xl pb-2">
+        <PageHeader
+          eyebrow="Tizim boshqaruvi"
+          title="Sozlamalar"
+          description="Profil, tashkilot va monitoring parametrlarini yagona joydan boshqaring."
+        />
+        <div className="mt-6 rounded-lg border border-danger/20 bg-danger-soft p-6 text-center shadow-card">
+          <p className="text-sm font-medium text-danger">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -633,6 +850,12 @@ export function SettingsView() {
           </div>
         }
       />
+
+      {error && (
+        <div className="mt-4 rounded-md border border-danger/20 bg-danger-soft px-3.5 py-3" role="alert">
+          <p className="text-sm font-medium leading-5 text-danger">{error}</p>
+        </div>
+      )}
 
       <section className="mt-5 grid items-start gap-4 lg:grid-cols-[15.5rem_minmax(0,1fr)]">
         <aside className="overflow-hidden rounded-lg border border-border bg-surface shadow-card lg:sticky lg:top-0">
@@ -706,6 +929,12 @@ export function SettingsView() {
               onChange={(organization) => markChanged({ ...draft, organization })}
             />
           )}
+          {activeTab === "economics" && (
+            <EconomicsSettings
+              settings={draft}
+              onChange={(economics) => markChanged({ ...draft, economics })}
+            />
+          )}
           {activeTab === "thresholds" && (
             <ThresholdSettings
               settings={draft}
@@ -725,7 +954,8 @@ export function SettingsView() {
       <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs leading-5 text-muted shadow-card sm:flex-row sm:items-center sm:justify-between">
         <span className="inline-flex items-center gap-2">
           <ShieldCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
-          Demo sozlamalar ushbu brauzerda xavfsiz saqlanadi va serverga yuborilmaydi.
+          Sozlamalar ma&apos;lumotlar bazasida saqlanadi va barcha
+          hisob-kitoblarda darhol qo&apos;llanadi.
         </span>
         <span className="shrink-0 font-mono text-[11px] font-bold text-muted-strong">Samara AI · v0.1.0</span>
       </div>

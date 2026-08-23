@@ -48,7 +48,16 @@ const defaultEesConfig = {
     costPerAccuracy: 0.006,
     errorPerAccuracy: 0.05,
   },
+  /** AI'gacha bo'lgan bazaviy davr uzunligi (kun) */
+  baselineDays: 60,
 };
+
+/**
+ * AI joriy etish xarajati, mln so'm.
+ * DIQQAT: bu taxminiy qiymat — ROI hisobi shunga bog'liq.
+ * Mijoz haqiqiy raqamni bergach, Sozlamalar sahifasidan almashtiriladi.
+ */
+const ASSUMED_AI_INVESTMENT = 180;
 
 async function main() {
   const organization = await prisma.organization.upsert({
@@ -65,6 +74,7 @@ async function main() {
           thresholds: defaultSettings.thresholds,
           notifications: defaultSettings.notifications,
           eesConfig: defaultEesConfig,
+          aiInvestmentCost: ASSUMED_AI_INVESTMENT,
         },
       },
     },
