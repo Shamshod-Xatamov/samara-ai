@@ -66,10 +66,12 @@ topishi va tuzatishi kerak.
 | `ishlab-chiqarish-2025-2026.xlsx` | 12 oylik ishlab chiqarish hisoboti, 1 420 qator |
 | `operatsion-jarayonlar.csv` | Jarayon loglari, 1 732 qator |
 | `sifatsiz-malumot-namunasi.csv` | Sifati past kichik namuna, 331 qator |
-| `sinov-korxona-2026.xlsx` | AI'ni sinash uchun mustaqil fayl (`pnpm data:test`) |
+| `sinov-korxona-2026.xlsx` | AI sinovi — o'zbekcha ustunlar, so'm va minut |
+| `sinov-zavod-2026.xlsx` | AI sinovi — ruscha ustunlar, ming so'm va ulush |
 
 AI qatlamini o'zingiz tekshirish uchun:
-[SINOV-YORIQNOMASI.md](./namuna-malumotlar/SINOV-YORIQNOMASI.md)
+[SINOV-YORIQNOMASI.md](./namuna-malumotlar/SINOV-YORIQNOMASI.md) va
+[SINOV-2-ZAVOD.md](./namuna-malumotlar/SINOV-2-ZAVOD.md)
 
 ## Ma'lumotlar bazasi
 

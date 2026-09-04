@@ -17,58 +17,42 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import {
-  cleanDataset,
-  getDataset,
-  listDatasets,
-  type CleaningResult,
-  type DatasetDetail,
-  type DatasetIssue,
-  type DatasetSummary,
-} from "@/services/datasets";
+  processingDatasets,
+  processingStages,
+  type ProcessingDataset,
+  type ProcessingIssueKey,
+} from "@/data/processing";
 
 type ProcessingStatus = "idle" | "processing" | "completed";
-type IssueKey = DatasetIssue["issueType"];
-
-const ISSUE_ORDER: IssueKey[] = ["MISSING", "DUPLICATE", "TYPE_ERROR", "OUTLIER"];
 
 const issuePresentation: Record<
-  IssueKey,
+  ProcessingIssueKey,
   {
-    label: string;
-    description: string;
     icon: typeof AlertTriangle;
     iconClass: string;
     barClass: string;
   }
 > = {
-  MISSING: {
-    label: "Bo'sh qiymatlar",
-    description: "To'ldirilmagan kataklar",
+  missing: {
     icon: AlertTriangle,
     iconClass: "bg-warning-soft text-warning",
     barClass: "bg-warning",
   },
-  DUPLICATE: {
-    label: "Dublikatlar",
-    description: "Takrorlangan yozuvlar",
+  duplicate: {
     icon: Copy,
     iconClass: "bg-primary-soft text-primary",
     barClass: "bg-primary",
   },
-  TYPE_ERROR: {
-    label: "Tip xatolari",
-    description: "Formatga mos kelmagan qiymat",
+  type: {
     icon: Braces,
     iconClass: "bg-danger-soft text-danger",
     barClass: "bg-danger",
   },
-  OUTLIER: {
-    label: "Outlierlar",
-    description: "Me'yordan tashqari qiymatlar",
+  outlier: {
     icon: ScanSearch,
     iconClass: "bg-accent-soft text-accent",
     barClass: "bg-accent",
@@ -76,43 +60,41 @@ const issuePresentation: Record<
 };
 
 const severityPresentation = {
-  HIGH: { label: "Yuqori", className: "bg-danger-soft text-danger" },
-  MEDIUM: { label: "O'rta", className: "bg-warning-soft text-warning" },
-  LOW: { label: "Past", className: "bg-info-soft text-info" },
+  high: { label: "Yuqori", className: "bg-danger-soft text-danger" },
+  medium: { label: "O'rta", className: "bg-warning-soft text-warning" },
+  low: { label: "Past", className: "bg-info-soft text-info" },
 };
 
-/** Tozalash boshlanmasdan oldin ko'rsatiladigan bosqichlar. */
-const DEFAULT_STAGES = [
-  { key: "structure", label: "Tuzilmani tekshirish", description: "Ustun va sxema tekshiruvi" },
-  { key: "missing", label: "Bo'sh qiymatlar", description: "Median va rejim bilan to'ldirish" },
-  { key: "duplicate", label: "Dublikatlar", description: "Takroriy yozuvlarni chiqarish" },
-  { key: "format", label: "Tip va formatlar", description: "Qiymat va o'lchov birligini standartlashtirish" },
-  { key: "outlier", label: "Outlier nazorati", description: "IQR chegarasida tekshirish" },
-];
-
 function formatNumber(value: number) {
-  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function getRemainingCount(count: number, status: ProcessingStatus, progress: number) {
+  if (status === "completed") return 0;
+  if (status === "idle") return count;
+  return Math.max(0, Math.ceil(count * (1 - progress / 100)));
 }
 
 function DatasetPicker({
-  datasets,
   value,
   onChange,
 }: {
-  datasets: DatasetSummary[];
-  value: string | null;
+  value: string;
   onChange: (value: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const selected = datasets.find((item) => item.id === value) ?? null;
+  const selectedDataset =
+    processingDatasets.find((item) => item.id === value) ?? processingDatasets[0];
 
   useEffect(() => {
     if (!isOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
-      if (!pickerRef.current?.contains(event.target as Node)) setIsOpen(false);
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -137,9 +119,8 @@ function DatasetPicker({
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        disabled={datasets.length === 0}
-        className="group flex h-12 w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-2.5 text-left shadow-sm transition-[border-color,box-shadow,background-color] hover:border-border-strong hover:bg-surface-muted/60 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-60"
-        aria-label={`Datasetni tanlash. Tanlangan: ${selected?.name ?? "yo'q"}`}
+        className="group flex h-12 w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-2.5 text-left shadow-sm transition-[border-color,box-shadow,background-color] hover:border-border-strong hover:bg-surface-muted/60 focus-visible:border-primary"
+        aria-label={`Datasetni tanlash. Tanlangan: ${selectedDataset.name}`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls="processing-dataset-options"
@@ -149,12 +130,10 @@ function DatasetPicker({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-bold text-foreground">
-            {selected?.name ?? "Dataset yo'q"}
+            {selectedDataset.name}
           </span>
           <span className="mt-0.5 block text-xs font-medium text-muted">
-            {selected
-              ? `${selected.format} · ${formatNumber(selected.rows)} qator`
-              : "Avval fayl yuklang"}
+            {selectedDataset.format} · {formatNumber(selectedDataset.rows)} qator
           </span>
         </span>
         <ChevronDown
@@ -174,7 +153,7 @@ function DatasetPicker({
             Datasetni tanlang
           </p>
           <div className="space-y-1">
-            {datasets.map((item) => {
+            {processingDatasets.map((item) => {
               const isSelected = item.id === value;
 
               return (
@@ -206,8 +185,7 @@ function DatasetPicker({
                       {item.name}
                     </span>
                     <span className="mt-0.5 block text-xs font-medium text-muted">
-                      {formatNumber(item.rows)} qator · {item.columns} ustun ·{" "}
-                      {item.cleanedQuality ?? item.quality ?? "—"}% sifat
+                      {formatNumber(item.rows)} qator · {item.columns} ustun · {item.initialQuality}% sifat
                     </span>
                   </span>
                   <span
@@ -228,12 +206,23 @@ function DatasetPicker({
 }
 
 function QualityScore({
-  score,
-  isClean,
+  dataset,
+  status,
+  progress,
 }: {
-  score: number;
-  isClean: boolean;
+  dataset: ProcessingDataset;
+  status: ProcessingStatus;
+  progress: number;
 }) {
+  const score =
+    status === "completed"
+      ? dataset.finalQuality
+      : status === "processing"
+        ? Math.round(
+            dataset.initialQuality +
+              (dataset.finalQuality - dataset.initialQuality) * (progress / 100),
+          )
+        : dataset.initialQuality;
   const circumference = 2 * Math.PI * 52;
   const offset = circumference - (score / 100) * circumference;
 
@@ -245,13 +234,20 @@ function QualityScore({
         role="img"
         aria-label={`Ma'lumot sifati ${score} foiz`}
       >
-        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--surface-muted)" strokeWidth="9" />
         <circle
           cx="60"
           cy="60"
           r="52"
           fill="none"
-          stroke={isClean ? "var(--success)" : "var(--primary)"}
+          stroke="var(--surface-muted)"
+          strokeWidth="9"
+        />
+        <circle
+          cx="60"
+          cy="60"
+          r="52"
+          fill="none"
+          stroke={status === "completed" ? "var(--success)" : "var(--primary)"}
           strokeLinecap="round"
           strokeWidth="9"
           strokeDasharray={circumference}
@@ -260,7 +256,9 @@ function QualityScore({
         />
       </svg>
       <div className="absolute inset-0 grid place-content-center text-center">
-        <p className="font-mono text-3xl font-bold tracking-[-0.06em] text-foreground">{score}%</p>
+        <p className="font-mono text-3xl font-bold tracking-[-0.06em] text-foreground">
+          {score}%
+        </p>
         <p className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.1em] text-faint">
           sifat balli
         </p>
@@ -270,171 +268,59 @@ function QualityScore({
 }
 
 export function ProcessingView() {
-  const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
-  const [datasetId, setDatasetId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<DatasetDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
+  const [datasetId, setDatasetId] = useState(processingDatasets[0].id);
   const [status, setStatus] = useState<ProcessingStatus>("idle");
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<CleaningResult | null>(null);
 
-  useEffect(() => {
-    void listDatasets().then((response) => {
-      setIsLoading(false);
+  const dataset = useMemo(
+    () => processingDatasets.find((item) => item.id === datasetId) ?? processingDatasets[0],
+    [datasetId],
+  );
+  const totalIssueCount = dataset.issues.reduce((total, issue) => total + issue.count, 0);
+  const remainingIssueCount = dataset.issues.reduce(
+    (total, issue) => total + getRemainingCount(issue.count, status, progress),
+    0,
+  );
+  const currentValidRows =
+    status === "completed"
+      ? dataset.validRowsAfter
+      : status === "processing"
+        ? Math.round(
+            dataset.validRowsBefore +
+              (dataset.validRowsAfter - dataset.validRowsBefore) * (progress / 100),
+          )
+        : dataset.validRowsBefore;
 
-      if (!response.ok) {
-        setError(response.message);
-        return;
-      }
-
-      setDatasets(response.data);
-      setDatasetId((current) => current ?? response.data[0]?.id ?? null);
-    });
-  }, []);
-
-  const applyDetail = useCallback((data: DatasetDetail) => {
-    const isCleanedDataset = data.dataset.status === "CLEANED";
-
-    setError("");
-    setDetail(data);
-    setStatus(isCleanedDataset ? "completed" : "idle");
-    setProgress(isCleanedDataset ? 100 : 0);
-  }, []);
-
-  useEffect(() => {
-    if (!datasetId) return;
-
-    let cancelled = false;
-
-    void getDataset(datasetId).then((response) => {
-      if (cancelled) return;
-
-      if (!response.ok) {
-        setError(response.message);
-        return;
-      }
-
-      applyDetail(response.data);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId, applyDetail]);
-
-  /** Dataset almashganda oldingi tozalash natijasi ko'rsatilmasligi kerak. */
-  function selectDataset(id: string) {
-    setDatasetId(id);
-    setResult(null);
-  }
-
-  // So'rov davomida progress ko'rsatiladi, lekin 95% dan oshmaydi —
-  // 100% faqat server javob bergandan keyin qo'yiladi.
   useEffect(() => {
     if (status !== "processing") return;
 
+    let currentProgress = 0;
+    let completionTimer: number | undefined;
     const interval = window.setInterval(() => {
-      setProgress((current) => Math.min(95, current + 5));
-    }, 120);
+      currentProgress = Math.min(100, currentProgress + 4);
+      setProgress(currentProgress);
 
-    return () => window.clearInterval(interval);
+      if (currentProgress === 100) {
+        window.clearInterval(interval);
+        completionTimer = window.setTimeout(() => setStatus("completed"), 280);
+      }
+    }, 105);
+
+    return () => {
+      window.clearInterval(interval);
+      if (completionTimer) window.clearTimeout(completionTimer);
+    };
   }, [status]);
 
-  const issuesByType = useMemo(() => {
-    const totals: Record<IssueKey, number> = {
-      MISSING: 0,
-      DUPLICATE: 0,
-      TYPE_ERROR: 0,
-      OUTLIER: 0,
-    };
+  function changeDataset(nextDatasetId: string) {
+    setDatasetId(nextDatasetId);
+    setStatus("idle");
+    setProgress(0);
+  }
 
-    for (const issue of detail?.issues ?? []) {
-      totals[issue.issueType] += issue.count;
-    }
-
-    return totals;
-  }, [detail]);
-
-  const totalIssueCount = ISSUE_ORDER.reduce(
-    (total, key) => total + issuesByType[key],
-    0,
-  );
-
-  const dataset = detail?.dataset ?? null;
-  const isCleaned = status === "completed";
-  const currentQuality = isCleaned
-    ? (result?.qualityAfter ?? dataset?.cleanedQuality ?? dataset?.quality ?? 0)
-    : (dataset?.quality ?? 0);
-
-  const validRows = isCleaned
-    ? (result?.validRowsAfter ?? null)
-    : null;
-
-  const stages = result?.stages ?? DEFAULT_STAGES.map((stage) => ({ ...stage, affected: 0 }));
-
-  async function startProcessing() {
-    if (!datasetId) return;
-
+  function startProcessing() {
     setProgress(0);
     setStatus("processing");
-    setError("");
-
-    const response = await cleanDataset(datasetId);
-
-    if (!response.ok) {
-      setStatus("idle");
-      setProgress(0);
-      setError(response.message);
-      return;
-    }
-
-    setResult(response.data);
-    setProgress(100);
-    setStatus("completed");
-
-    const refreshedDetail = await getDataset(datasetId);
-    if (refreshedDetail.ok) applyDetail(refreshedDetail.data);
-
-    const refreshedList = await listDatasets();
-    if (refreshedList.ok) setDatasets(refreshedList.data);
-  }
-
-  if (isLoading) {
-    return (
-      <div className="mx-auto grid min-h-64 w-full max-w-6xl place-content-center text-center">
-        <LoaderCircle className="mx-auto size-6 animate-spin text-primary" aria-hidden="true" />
-        <p className="mt-3 text-xs font-medium text-muted">Yuklanmoqda...</p>
-      </div>
-    );
-  }
-
-  if (!dataset) {
-    return (
-      <div className="mx-auto w-full max-w-6xl pb-2">
-        <PageHeader
-          eyebrow="Ma'lumot sifati"
-          title="Ma'lumotlarni qayta ishlash"
-          description="Xatolarni aniqlang, ma'lumotni standartlashtiring va AI tahliliga tayyorlang."
-        />
-        <div className="mt-6 grid min-h-56 place-content-center rounded-lg border border-dashed border-border-strong bg-surface p-8 text-center shadow-card">
-          <FileText className="mx-auto size-7 text-faint" aria-hidden="true" />
-          <h2 className="mt-4 text-sm font-bold text-foreground">Qayta ishlash uchun dataset yo&apos;q</h2>
-          <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-muted">
-            Avval CSV yoki XLSX fayl yuklang. Fayl yuklangandan keyin sifat muammolari
-            avtomatik aniqlanadi.
-          </p>
-          <Link
-            href="/malumotlar"
-            className="mx-auto mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-hover"
-          >
-            Ma&apos;lumot yuklash
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -444,66 +330,52 @@ export function ProcessingView() {
         title="Ma'lumotlarni qayta ishlash"
         description="Xatolarni aniqlang, ma'lumotni standartlashtiring va AI tahliliga tayyorlang."
         action={
-          <DatasetPicker
-            datasets={datasets}
-            value={datasetId}
-            onChange={selectDataset}
-          />
+          <DatasetPicker value={datasetId} onChange={changeDataset} />
         }
       />
 
-      {error && (
-        <div className="mt-4 flex items-start gap-2.5 rounded-md border border-danger/20 bg-danger-soft px-3.5 py-3" role="alert">
-          <AlertTriangle className="mt-px size-[18px] shrink-0 text-danger" aria-hidden="true" />
-          <p className="text-sm font-medium leading-5 text-danger">{error}</p>
-        </div>
-      )}
-
       <section className="mt-5 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_18.5rem]">
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-          {ISSUE_ORDER.map((key) => {
-            const presentation = issuePresentation[key];
+          {dataset.issues.map((issue) => {
+            const presentation = issuePresentation[issue.key];
             const Icon = presentation.icon;
-            const count = issuesByType[key];
-            const remaining = isCleaned ? 0 : count;
-            const share = dataset.rows > 0 ? (count / dataset.rows) * 100 : 0;
+            const remaining = getRemainingCount(issue.count, status, progress);
+            const resolvedPercent = Math.round(((issue.count - remaining) / issue.count) * 100);
 
             return (
-              <article className="rounded-lg border border-border bg-surface p-3.5 shadow-card sm:p-4" key={key}>
+              <article className="rounded-lg border border-border bg-surface p-3.5 shadow-card sm:p-4" key={issue.key}>
                 <div className="flex items-start justify-between gap-2">
                   <span className={`grid size-8 place-items-center rounded-md ${presentation.iconClass}`}>
                     <Icon className="size-4" strokeWidth={1.9} aria-hidden="true" />
                   </span>
-                  {isCleaned ? (
+                  {status === "completed" ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-1 text-[11px] font-bold text-success">
                       <Check className="size-3" aria-hidden="true" />
                       Tuzatildi
                     </span>
                   ) : (
-                    <span className="font-mono text-xs font-bold text-faint">
-                      {share.toFixed(2)}%
-                    </span>
+                    <span className="font-mono text-xs font-bold text-faint">{issue.affected}</span>
                   )}
                 </div>
 
                 <div className="mt-3 flex items-end justify-between gap-2">
                   <div>
-                    <p className="text-[13px] font-bold text-muted">{presentation.label}</p>
+                    <p className="text-[13px] font-bold text-muted">{issue.label}</p>
                     <p className="mt-1 font-mono text-xl font-bold tracking-[-0.045em] text-foreground sm:text-[1.4rem]">
                       {formatNumber(remaining)}
                     </p>
                   </div>
                   <p className="hidden max-w-28 text-right text-[11px] leading-4 text-faint sm:block">
-                    {presentation.description}
+                    {issue.description}
                   </p>
                 </div>
 
                 <div className="mt-3 h-1 overflow-hidden rounded-full bg-surface-muted">
                   <div
                     className={`h-full rounded-full transition-[width] duration-300 ${
-                      isCleaned ? "bg-success" : presentation.barClass
+                      status === "completed" ? "bg-success" : presentation.barClass
                     }`}
-                    style={{ width: isCleaned ? "100%" : `${Math.max(2, Math.min(100, share * 8))}%` }}
+                    style={{ width: `${status === "idle" ? 100 : Math.max(2, 100 - resolvedPercent)}%` }}
                   />
                 </div>
               </article>
@@ -521,33 +393,29 @@ export function ProcessingView() {
             </div>
             <span
               className={`rounded-full px-2 py-1 text-[11px] font-bold ${
-                isCleaned
+                status === "completed"
                   ? "bg-success-soft text-success"
                   : status === "processing"
                     ? "bg-primary-soft text-primary"
                     : "bg-warning-soft text-warning"
               }`}
             >
-              {isCleaned ? "Tayyor" : status === "processing" ? "Jarayonda" : "Tekshiruv kerak"}
+              {status === "completed" ? "Tayyor" : status === "processing" ? "Jarayonda" : "Tekshiruv kerak"}
             </span>
           </div>
 
           <div className="mt-4 flex justify-center">
-            <QualityScore score={currentQuality} isClean={isCleaned} />
+            <QualityScore dataset={dataset} status={status} progress={progress} />
           </div>
 
           <dl className="mt-4 space-y-2.5 border-t border-border pt-4">
             <div className="flex items-center justify-between gap-3 text-xs">
               <dt className="text-muted">Yaroqli qatorlar</dt>
-              <dd className="font-mono font-bold text-foreground">
-                {validRows !== null ? formatNumber(validRows) : "—"}
-              </dd>
+              <dd className="font-mono font-bold text-foreground">{formatNumber(currentValidRows)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3 text-xs">
-              <dt className="text-muted">Aniqlangan muammolar</dt>
-              <dd className="font-mono font-bold text-foreground">
-                {formatNumber(isCleaned ? 0 : totalIssueCount)}
-              </dd>
+              <dt className="text-muted">Qolgan muammolar</dt>
+              <dd className="font-mono font-bold text-foreground">{formatNumber(remainingIssueCount)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3 text-xs">
               <dt className="text-muted">Jami qatorlar</dt>
@@ -557,7 +425,7 @@ export function ProcessingView() {
 
           <button
             type="button"
-            onClick={() => void startProcessing()}
+            onClick={startProcessing}
             disabled={status === "processing"}
             className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-bold text-white shadow-sm transition-[background-color,transform] hover:bg-primary-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-75"
           >
@@ -566,7 +434,7 @@ export function ProcessingView() {
                 <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                 Qayta ishlanmoqda {progress}%
               </>
-            ) : isCleaned ? (
+            ) : status === "completed" ? (
               <>
                 <RotateCcw className="size-4" aria-hidden="true" />
                 Qayta ishga tushirish
@@ -579,7 +447,7 @@ export function ProcessingView() {
             )}
           </button>
 
-          {isCleaned && (
+          {status === "completed" && (
             <Link
               href="/ai-tahlil"
               className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-border-strong bg-surface text-xs font-bold text-foreground transition-colors hover:bg-surface-muted"
@@ -606,18 +474,14 @@ export function ProcessingView() {
           </div>
 
           <div className="mt-5 space-y-1">
-            {stages.map((stage, index) => {
-              const threshold = ((index + 1) / stages.length) * 100;
-              const previousThreshold = (index / stages.length) * 100;
-              const isCompleted = isCleaned || progress >= threshold;
-              const isActive =
-                status === "processing" &&
-                progress >= previousThreshold &&
-                progress < threshold;
+            {processingStages.map((stage, index) => {
+              const previousThreshold = index === 0 ? 0 : processingStages[index - 1].threshold;
+              const isCompleted = status === "completed" || progress >= stage.threshold;
+              const isActive = status === "processing" && progress >= previousThreshold && progress < stage.threshold;
 
               return (
-                <div className="relative flex gap-3 pb-4 last:pb-0" key={stage.key}>
-                  {index < stages.length - 1 && (
+                <div className="relative flex gap-3 pb-4 last:pb-0" key={stage.label}>
+                  {index < processingStages.length - 1 && (
                     <span
                       className={`absolute left-[15px] top-8 h-[calc(100%-1.25rem)] w-px ${
                         isCompleted ? "bg-success/45" : "bg-border"
@@ -643,16 +507,9 @@ export function ProcessingView() {
                     )}
                   </span>
                   <div className="min-w-0 pt-0.5">
-                    <div className="flex items-baseline gap-2">
-                      <p className={`text-[13px] font-bold ${isActive ? "text-primary" : "text-foreground"}`}>
-                        {stage.label}
-                      </p>
-                      {isCleaned && stage.affected > 0 && (
-                        <span className="font-mono text-[11px] font-bold text-success">
-                          {formatNumber(stage.affected)}
-                        </span>
-                      )}
-                    </div>
+                    <p className={`text-[13px] font-bold ${isActive ? "text-primary" : "text-foreground"}`}>
+                      {stage.label}
+                    </p>
                     <p className="mt-0.5 text-[11px] leading-4 text-muted">{stage.description}</p>
                   </div>
                 </div>
@@ -670,69 +527,63 @@ export function ProcessingView() {
               </h2>
             </div>
             <span className="rounded-full bg-surface-muted px-2.5 py-1 font-mono text-[11px] font-bold text-muted-strong">
-              {detail?.issues.length ?? 0} ta yozuv
+              {dataset.details.length} turdagi muammo
             </span>
           </div>
 
-          {detail && detail.issues.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-border bg-surface-muted/70">
-                    <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Maydon</th>
-                    <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Muammo</th>
-                    <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Soni</th>
-                    <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Yechim</th>
-                    <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Holat</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {detail.issues.map((issue) => {
-                    const severity = severityPresentation[issue.severity];
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-border bg-surface-muted/70">
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Maydon</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Muammo</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Soni</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Yechim</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.07em] text-faint">Holat</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {dataset.details.map((detail) => {
+                  const severity = severityPresentation[detail.severity];
 
-                    return (
-                      <tr className="transition-colors hover:bg-canvas" key={issue.id}>
-                        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-bold text-foreground">
-                          {issue.columnName ?? "— butun qator —"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-muted-strong">
-                          {issuePresentation[issue.issueType].label}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs font-bold text-foreground">
-                          {isCleaned ? 0 : formatNumber(issue.count)}
-                        </td>
-                        <td className="max-w-64 px-4 py-3 text-xs font-medium text-muted">
-                          {issue.suggestedFix}
-                        </td>
-                        <td className="px-4 py-3">
-                          {isCleaned ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-1 text-[11px] font-bold text-success">
-                              <CheckCircle2 className="size-3" aria-hidden="true" />
-                              Tuzatildi
-                            </span>
-                          ) : (
-                            <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${severity.className}`}>
-                              {severity.label}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="grid min-h-40 place-content-center text-center">
-              <CheckCircle2 className="mx-auto size-6 text-success" aria-hidden="true" />
-              <p className="mt-3 text-xs font-bold text-foreground">Muammo aniqlanmadi</p>
-              <p className="mt-1 text-xs text-muted">Bu dataset tozalashsiz ham tahlilga yaroqli.</p>
-            </div>
-          )}
+                  return (
+                    <tr className="transition-colors hover:bg-canvas" key={`${detail.field}-${detail.problem}`}>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-bold text-foreground">
+                        {detail.field}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-muted-strong">
+                        {detail.problem}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs font-bold text-foreground">
+                        {status === "completed"
+                          ? 0
+                          : getRemainingCount(detail.count, status, progress)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-muted">
+                        {detail.solution}
+                      </td>
+                      <td className="px-4 py-3">
+                        {status === "completed" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-1 text-[11px] font-bold text-success">
+                            <CheckCircle2 className="size-3" aria-hidden="true" />
+                            Tuzatildi
+                          </span>
+                        ) : (
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${severity.className}`}>
+                            {severity.label}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
-      {isCleaned && result && (
+      {status === "completed" && (
         <section className="mt-4 overflow-hidden rounded-lg border border-success/20 bg-success-soft/40 shadow-card">
           <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="flex items-start gap-3">
@@ -745,20 +596,15 @@ export function ProcessingView() {
                   Dataset AI tahliliga tayyor
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-muted">
-                  {formatNumber(result.droppedDuplicates)} ta dublikat chiqarildi, sifat balli{" "}
-                  {result.qualityBefore}% dan {result.qualityAfter}% ga oshdi.
+                  {formatNumber(totalIssueCount)} ta muammo ko&apos;rib chiqildi, sifat balli {dataset.initialQuality}% dan {dataset.finalQuality}% ga oshdi.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 sm:min-w-[22rem]">
               {[
-                { label: "Sifat", before: `${result.qualityBefore}%`, after: `${result.qualityAfter}%` },
-                {
-                  label: "Yaroqli qator",
-                  before: formatNumber(result.validRowsBefore),
-                  after: formatNumber(result.validRowsAfter),
-                },
+                { label: "Sifat", before: `${dataset.initialQuality}%`, after: `${dataset.finalQuality}%` },
+                { label: "Yaroqli qator", before: formatNumber(dataset.validRowsBefore), after: formatNumber(dataset.validRowsAfter) },
                 { label: "Muammolar", before: formatNumber(totalIssueCount), after: "0" },
               ].map((item) => (
                 <div className="rounded-md border border-success/15 bg-surface/80 p-2.5" key={item.label}>
@@ -777,8 +623,7 @@ export function ProcessingView() {
 
       <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-[11px] leading-5 text-muted shadow-card">
         <ShieldCheck className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        Har bir tuzatish qator darajasida qayd etiladi: bo&apos;sh qiymat median bilan to&apos;ldiriladi,
-        outlier IQR chegarasida kesiladi, dublikat esa chiqarib tashlanadi.
+        Tozalash qoidalari demo rejimida ishlaydi. Real manba ulanganda barcha o&apos;zgarishlar audit jurnalida saqlanadi.
       </div>
     </div>
   );

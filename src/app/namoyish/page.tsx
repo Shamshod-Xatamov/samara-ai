@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { DEMO_DASHBOARD_METRICS } from "@/data/demo-metrics";
 import { DashboardView } from "@/features/dashboard/dashboard-view";
 
 export const metadata: Metadata = {
@@ -13,9 +12,9 @@ export const metadata: Metadata = {
 /**
  * Landing sahifasidagi planshet ichida ko'rsatiladigan sahifa.
  *
- * Sessiyasiz ochiladi, lekin haqiqiy ma'lumotga tegmaydi — barcha raqamlar
- * `DEMO_DASHBOARD_METRICS` dan olinadi.
+ * Sessiyasiz ochiladi, lekin haqiqiy ma'lumotga tegmaydi — dashboardning
+ * barcha raqamlari lokal statik namuna ma'lumotidan olinadi.
  */
 export default function PreviewPage() {
-  return <DashboardView demoData={DEMO_DASHBOARD_METRICS} />;
+  return <DashboardView />;
 }

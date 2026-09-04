@@ -74,15 +74,18 @@ openssl rand -base64 32
 
 ## 5. Deploy va migratsiya
 
-**Deploy** tugmasini bosing. Build jarayoni avtomatik ravishda:
+**Deploy** tugmasini bosing. Vercel `vercel-build` skriptini ustun qo'yadi:
 
 ```
 prisma generate        → Prisma client
-prisma migrate deploy  → 6 ta migratsiya Neon'ga qo'llanadi
+prisma migrate deploy  → migratsiyalar Neon'ga qo'llanadi
 next build             → ilova quriladi
 ```
 
-Migratsiya qo'lda ishga tushirilmaydi — `build` skriptining ichida.
+Migratsiya qo'lda ishga tushirilmaydi.
+
+> Lokal `pnpm build` esa migratsiyasiz ishlaydi — Docker o'chiq bo'lsa ham
+> loyihani qurish mumkin.
 
 ---
 
